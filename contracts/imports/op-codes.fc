@@ -1,0 +1,29 @@
+const int op::get_static_data        = 0x2fcb26a2;
+const int op::report_static_data     = 0x8b771735;
+const int op::excesses               = 0xd53276db;
+
+;; Jettons
+const int op::transfer_jetton        = 0xf8a7ea5;
+const int op::transfer_notification  = 0x7362d09c;
+const int op::provide_wallet_address = 0x2c76b973;
+const int op::take_wallet_address    = 0xd1735400;
+
+;; NFT
+const int op::transfer_nft           = 0x5fcc3d14;
+const int op::ownership_assigned_nft = 0x05138d91;
+const int op::burn_nft               = 0x55521d04;
+const int op::transferred_nft        = 0x9cf42a7d;
+const int op::claim_nft              = 0xa769de27;
+const int op::withdraw_nft           = 0xb5de5f9e;
+const int op::change_state_nft       = 0xdca3da4c;
+
+;; NFT-collection
+const int op::get_royalty_params     = 0x693d3950;
+const int op::report_royalty_params  = 0xa8cb00ad;
+const int op::withdraw_fees          = 0x5;
+const int op::get_info               = 0x6;
+const int op::withdraw_rewards       = 0x7;
+const int op::change_min_deposit     = 0x8;
+const int op::withdraw_accident_jettons = 0x9;
+const int op::change_start_time      = 0x84d1d850;
+const int op::premint                = 0x446077df;

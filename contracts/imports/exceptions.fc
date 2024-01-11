@@ -1,0 +1,12 @@
+const int exc::out_of_gas = 13;
+const int exc::less_than_min_deposit = 41;
+const int exc::pool_active = 42;
+const int exc::incorrect_jetton = 43;
+const int exc::not_unlocked_yet = 44;
+const int exc::incorrect_input = 45;
+const int exc::not_enough_jettons = 46;
+const int exc::incorrect_lock_period = 47;
+const int exc::staking_not_started = 48;
+const int exc::not_enough_ton_for_fees = 49;
+const int exc::incorrect_sender = 50;
+const int exc::unsupported_op = 0xffff;

@@ -1,0 +1,114 @@
+cell calculate_state_init(slice collection_address, cell nft_item_code, int item_index) inline {
+    return begin_cell()
+                .store_uint(0, 2)
+                .store_dict(nft_item_code)
+                .store_dict(
+                    begin_cell().store_uint(item_index, 32).store_slice(collection_address).end_cell()
+                )
+                .store_uint(0, 1)
+            .end_cell();
+}
+
+slice calculate_nft_item_address(cell nft_item_code, cell state_init) inline {
+    return begin_cell()
+                .store_uint(4, 3)
+                .store_int(0, 8)  ;; workchain();
+                .store_uint(cell_hash(state_init), 256)
+                .end_cell()
+            .begin_parse();
+}
+
+slice calculate_address_by_index(slice collection_address, cell nft_item_code, int item_index) inline {
+    return begin_cell()
+                .store_uint(4, 3)
+                .store_int(0, 8)  ;; workchain();
+                .store_uint(cell_hash(calculate_state_init(collection_address, nft_item_code, item_index)), 256)
+                .end_cell()
+            .begin_parse();
+}
+
+
+() deploy_nft_item(int item_index, cell nft_item_code, cell nft_content, slice collection_address) impure inline {
+    cell state_init = calculate_state_init(collection_address, nft_item_code, item_index);
+    slice nft_address = calculate_nft_item_address(nft_item_code, state_init);
+    builder msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(nft_address)
+                    .store_coins(0)
+                    .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+                    .store_ref(state_init)
+                    .store_ref(nft_content);
+    send_raw_message(msg.end_cell(), 64); 
+}
+
+
+() send_jettons(int query_id, int jetton_amount, slice to_address, slice jetton_wallet_address, 
+                int msg_value, int sending_mode, int need_response) impure inline {
+
+    builder msg_body = begin_cell()
+                        .store_uint(op::transfer_jetton, 32)
+                        .store_uint(query_id, 64)
+                        .store_coins(jetton_amount)
+                        .store_slice(to_address);
+    if (need_response) {
+        msg_body = msg_body.store_slice(to_address);
+    }
+    else {
+        msg_body = msg_body.store_uint(0, 2);
+    }
+    msg_body = msg_body.store_uint(0, 1)
+                        .store_coins(1)
+                        .store_uint(0, 1);
+
+    builder msg = begin_cell()
+                .store_uint(0x10, 6) 
+                .store_slice(jetton_wallet_address)
+                .store_coins(msg_value)
+                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
+                .store_uint(1, 1)
+                .store_ref(msg_body.end_cell());
+            
+    send_raw_message(msg.end_cell(), sending_mode);  
+}
+
+
+() send_nft(int query_id, slice nft_address, slice to_address, 
+            int msg_value, int sending_mode) impure inline {
+
+    builder msg = begin_cell()
+                    .store_uint(0x18, 6)
+                    .store_slice(nft_address)
+                    .store_coins(msg_value)
+                    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
+                    .store_uint(1, 1)
+                    .store_ref(
+                        begin_cell()
+                            .store_uint(op::transfer_nft, 32)
+                            .store_uint(query_id, 64)
+                            .store_slice(to_address)
+                            .store_slice(to_address)
+                            .store_uint(0, 1)
+                            .store_coins(1)
+                            .store_uint(0, 1)
+                        .end_cell()
+                    );
+
+    send_raw_message(msg.end_cell(), sending_mode); 
+}
+
+
+() send_msg(slice to_address, int amount, int op, int query_id, builder payload, int send_mode) impure inline {
+    var msg = begin_cell()
+        .store_uint(0x10, 6) ;; nobounce - int_msg_info$0 ihr_disabled:Bool bounce:Bool bounced:Bool src:MsgAddress -> 010000
+        .store_slice(to_address)
+        .store_coins(amount)
+        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+        .store_uint(op, 32)
+        .store_uint(query_id, 64);
+
+    if (~ null?(payload)) {
+        msg = msg.store_builder(payload);
+    }
+
+    send_raw_message(msg.end_cell(), send_mode);
+}

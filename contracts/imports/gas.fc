@@ -1,0 +1,8 @@
+const int gas::provide_addr = 20000000;
+const int gas::stake = 100000000;
+const int gas::jetton_transfer = 55000000;
+const int gas::change_state_nft = 10000000;
+const int gas::claim_nft = 200000000;
+const int gas::withdraw_nft = 300000000;
+const int gas::min_tons_for_storage = 50000000;
+const int gas::tons_for_collection = 200000000;
