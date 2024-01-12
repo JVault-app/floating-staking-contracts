@@ -172,7 +172,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
                 storage::rewards_wallet_address = sender_address;
                 storage::wallet_rewards_changed = 1;
             } 
-            ifnot (equal_slices(sender_address, storage::rewards_wallet_address) & (new_end_time > time_now)) {
+            ifnot (equal_slices(sender_address, storage::rewards_wallet_address) & (new_end_time > time_now) & equal_slices(from_address, storage::creator_address)) {
                 send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1);
                 return ();
             }
@@ -272,11 +272,6 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
             (res, success) = storage::states_dict.udict_get?(32, index_in_states);
         }
         total_rewards += muldiv(prev_farming_speed * (time_now - prev_time), locked_jettons, prev_tvl * farming_speed_devider);
-
-        slice dict_value = begin_cell().store_uint(time_now, 32).store_coins(prev_tvl).store_coins(prev_farming_speed).end_cell().begin_parse();
-        storage::states_dict~udict_add?(32, index_in_states, dict_value);
-        storage::farming_speed = prev_farming_speed;
-        storage::cur_state_index = index_in_states;
         
         send_jettons(query_id, total_rewards, from_address, storage::rewards_wallet_address, gas::jetton_transfer, 0, 0);  ;; send rewards
 
@@ -304,6 +299,11 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
             send_msg(from_address, 0, op::excesses, query_id, null(), 128);
         }
 
+        slice dict_value = begin_cell().store_uint(time_now, 32).store_coins(prev_tvl).store_coins(prev_farming_speed).end_cell().begin_parse();
+        storage::states_dict~udict_add?(32, index_in_states, dict_value);
+        storage::farming_speed = prev_farming_speed;
+        storage::cur_state_index = index_in_states;
+        
         save_data();
         return ();
     }
