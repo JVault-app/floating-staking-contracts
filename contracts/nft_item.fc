@@ -7,15 +7,15 @@
 #include "imports/utils.fc";
 
 
-global int storage::init?;
-global int storage::collection_index;
-global slice storage::collection_address;
-global slice storage::owner_address;
-global int storage::index_in_states;
-global int storage::locked_value;
-global int storage::start_time;
-global int storage::unlock_time;
-global int storage::claimed_rewards;
+global int storage::init?;                   ;; is NFT initialized? (uint1)
+global int storage::collection_index;        ;; index of this NFT in collection (uint32)
+global slice storage::collection_address;    ;; address of NFT collection (MsgAddress)
+global slice storage::owner_address;         ;; address of the NFT owner (MsgAddress)
+global int storage::index_in_states;         ;; index of this NFT in states_dict (uint32)
+global int storage::locked_value;            ;; amount of locked coins (Coins)
+global int storage::start_time;              ;; staking start timestamp (uint32)
+global int storage::unlock_time;             ;; jettons unlock timestamp (uint32) 
+global int storage::claimed_rewards;         ;; claimed rewards (Coins)
 ;; global cell storage::content;
 
 
@@ -56,8 +56,8 @@ global int storage::claimed_rewards;
     );
 }
 
-
-() transfer_ownership(int my_balance, slice sender_address, int query_id, slice in_msg_body, int fwd_fees) impure inline {
+;; remains from simple NFT
+() transfer_ownership(int my_balance, slice sender_address, int query_id, slice in_msg_body, int fwd_fees) impure inline { 
     throw_unless(401, equal_slices(sender_address, storage::owner_address));
 
     slice new_owner_address = in_msg_body~load_msg_addr();
@@ -130,7 +130,8 @@ global int storage::claimed_rewards;
                       .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                       .store_uint(op::ownership_assigned_nft, 32)
                     .end_cell();
-        send_raw_message(msg, 0);
+        send_raw_message(msg, 0);  ;; notify owner about mint
+
         save_data();
         return ();
     }
@@ -151,6 +152,7 @@ global int storage::claimed_rewards;
         else {
             throw_unless(exc::out_of_gas, msg_value >= gas::claim_nft);
         }
+        
         builder payload = begin_cell()
                             .store_uint(storage::collection_index, 32)
                             .store_slice(storage::owner_address)
