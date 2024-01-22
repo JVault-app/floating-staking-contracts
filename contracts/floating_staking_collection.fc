@@ -31,8 +31,8 @@ global int storage::withdrawable_jettons;     ;; JVault commissions (Coins)
 
 global cell storage::states_dict;             ;; dict of TVL states (index -> state) (Cell)
 
-global int storage::wallet_rewards_changed;   ;;
-global int storage::wallet_lock_changed;      ;;
+global int storage::wallet_rewards_changed;   ;; is rewards wallet initialized? (uint1)
+global int storage::wallet_lock_changed;      ;; is lock wallet initialized? (uint1)
 
 global cell storage::last_ref;
 global slice storage::creator_address;        ;; creator address (MsgAddress)
@@ -60,7 +60,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
 
     storage::rewards_wallet_address = ds~load_msg_addr();
     storage::rewards_balance        = ds~load_coins();
-    storage::commission_factor      = ds~load_uint(16);  ;; perenesti
+    storage::commission_factor      = ds~load_uint(16);  ;; perenesti v last cellЯ
     storage::withdrawable_jettons   = ds~load_coins();
 
     storage::states_dict            = ds~load_dict();
@@ -104,6 +104,24 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
         .end_cell()
     );
 }
+
+
+() set_lock_wallet_address(slice lock_wallet_address) impure {
+    storage::lock_wallet_address = lock_wallet_address;
+    storage::last_ref = begin_cell()
+                    .store_slice(storage::lock_wallet_address)
+                    .store_slice(storage::admin_address)
+                    .store_slice(storage::creator_address)
+                .end_cell();
+    storage::wallet_lock_changed = 1;
+}
+
+
+() set_rewards_wallet_address(slice rewards_wallet_address) impure {
+    storage::rewards_wallet_address = rewards_wallet_address;
+    storage::wallet_rewards_changed = 1;
+}
+
 
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
@@ -151,6 +169,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
 
     if  (op == op::transfer_notification) {
         throw_if(exc::out_of_gas, msg_value < gas::stake);
+        load_last_cell();
         
         int transferred_jettons = in_msg_body~load_coins();
         slice from_address = in_msg_body~load_msg_addr();
@@ -168,11 +187,14 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
         if (lock_period == 0xffffffff) {  ;; add rewards
             int new_end_time = in_msg_body~load_uint(32);
             ;; throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::rewards_wallet_address));
-            if (storage::wallet_rewards_changed == 0) {  ;; for non-discoverable jettons
-                storage::rewards_wallet_address = sender_address;
-                storage::wallet_rewards_changed = 1;
+            if (storage::wallet_rewards_changed == 0) {  ;; for non-discoverable jettons set wallet after the first transaction
+                if (equal_slices(storage::lock_wallet_address, storage::rewards_wallet_address)) {
+                    set_lock_wallet_address(sender_address);
+                }
+                set_rewards_wallet_address(sender_address);
             } 
-            ifnot (equal_slices(sender_address, storage::rewards_wallet_address) & (new_end_time > time_now) & equal_slices(from_address, storage::creator_address)) {
+            ifnot (equal_slices(sender_address, storage::rewards_wallet_address) & (new_end_time > time_now) &
+                   (new_end_time == storage::end_time | equal_slices(from_address, storage::creator_address))) {
                 send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1);
                 return ();
             }
@@ -193,24 +215,23 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
                     storage::start_time = time_now;
                 }
             }
+            else {
+                storage::farming_speed = 0;
+            }
             storage::end_time = new_end_time;
 
             send_msg(from_address, 0, op::excesses, query_id, null(), 64);
         }
         else {  ;; stake jettons
-            load_last_cell();
             ;; throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::lock_wallet_address));
             ;; throw_unless(exc::incorrect_lock_period, lock_period >= storage::min_lock_period);
             ;; throw_unless(exc::less_than_min_deposit, transferred_jettons > storage::minimum_deposit);
             ;; throw_unless(exc::staking_not_started, time_now > storage::start_time);
-            if (storage::wallet_lock_changed == 0) {  ;; for non-discoverable jettons
-                storage::lock_wallet_address = sender_address;
-                storage::wallet_lock_changed = 1;
-                storage::last_ref = begin_cell()
-                                .store_slice(storage::lock_wallet_address)
-                                .store_slice(storage::admin_address)
-                                .store_slice(storage::creator_address)
-                            .end_cell();
+            if (storage::wallet_lock_changed == 0) {  ;; for non-discoverable jettons set wallets after the first transaction
+                if (equal_slices(storage::lock_wallet_address, storage::rewards_wallet_address)) {
+                    set_rewards_wallet_address(sender_address); 
+                }
+                set_lock_wallet_address(sender_address);
             } 
             ifnot (equal_slices(sender_address, storage::lock_wallet_address) & (lock_period >= storage::min_lock_period) &
                    (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time)) {
@@ -267,9 +288,13 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
             prev_time = cur_time;
             prev_tvl = res~load_coins();
             prev_farming_speed = res~load_coins();
-
             index_in_states += 1;
-            (res, success) = storage::states_dict.udict_get?(32, index_in_states);
+            if (prev_time == storage::end_time) {
+                success = 0;
+            }
+            else {
+                (res, success) = storage::states_dict.udict_get?(32, index_in_states);
+            }
         }
         total_rewards += muldiv(prev_farming_speed * (time_now - prev_time), locked_jettons, prev_tvl * farming_speed_devider);
         
@@ -300,7 +325,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
         }
 
         slice dict_value = begin_cell().store_uint(time_now, 32).store_coins(prev_tvl).store_coins(prev_farming_speed).end_cell().begin_parse();
-        storage::states_dict~udict_add?(32, index_in_states, dict_value);
+        storage::states_dict~udict_set(32, index_in_states, dict_value);
         storage::farming_speed = prev_farming_speed;
         storage::cur_state_index = index_in_states;
         
@@ -362,22 +387,17 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
     if (op == op::take_wallet_address) {  ;; change wallet address (used only once)
         if (equal_slices(sender_address, storage::lock_wallet_address)) {
             if (equal_slices(storage::lock_wallet_address, storage::rewards_wallet_address)) {
-                storage::rewards_wallet_address = in_msg_body~load_msg_addr();
-                storage::lock_wallet_address = storage::rewards_wallet_address;
+                set_rewards_wallet_address(in_msg_body~load_msg_addr());
+                set_lock_wallet_address(storage::rewards_wallet_address);   
             }
             else {
-                storage::lock_wallet_address = in_msg_body~load_msg_addr();
+                set_lock_wallet_address(in_msg_body~load_msg_addr());
             }
         }
         elseif (equal_slices(sender_address, storage::rewards_wallet_address)) {
-            storage::rewards_wallet_address = in_msg_body~load_msg_addr();
+            set_rewards_wallet_address(in_msg_body~load_msg_addr());
         }
         
-        storage::last_ref = begin_cell()
-                                .store_slice(storage::lock_wallet_address)
-                                .store_slice(storage::admin_address)
-                                .store_slice(storage::creator_address)
-                            .end_cell();
         save_data();
         return ();
     }
@@ -393,12 +413,12 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
         return ();
     }
 
-    ;; if (op == 0xffff) {  ;; for debug only
-    ;;     storage::nft_item_code = in_msg_body~load_ref();
-    ;;     save_data();
-    ;;     set_code(in_msg_body~load_ref());
-    ;;     return ();
-    ;; }
+    if (op == 0xffff) {  ;; for debug only
+        storage::nft_item_code = in_msg_body~load_ref();
+        save_data();
+        set_code(in_msg_body~load_ref());
+        return ();
+    }
 
     throw(exc::unsupported_op);
 }
