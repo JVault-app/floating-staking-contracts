@@ -9,4 +9,5 @@ const int exc::incorrect_lock_period = 47;
 const int exc::staking_not_started = 48;
 const int exc::not_enough_ton_for_fees = 49;
 const int exc::incorrect_sender = 50;
+const int exc::transfer_not_allowed = 51;
 const int exc::unsupported_op = 0xffff;

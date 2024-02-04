@@ -16,6 +16,8 @@ const int op::transferred_nft        = 0x9cf42a7d;
 const int op::claim_nft              = 0xa769de27;
 const int op::withdraw_nft           = 0xb5de5f9e;
 const int op::change_state_nft       = 0xdca3da4c;
+const int op::get_storage_data       = 0x5b88e5cc;
+const int op::report_storage_data    = 0xaab4a8ef;
 
 ;; NFT-collection
 const int op::get_royalty_params     = 0x693d3950;

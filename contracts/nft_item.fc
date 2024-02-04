@@ -16,6 +16,7 @@ global int storage::locked_value;            ;; amount of locked coins (Coins)
 global int storage::start_time;              ;; staking start timestamp (uint32)
 global int storage::unlock_time;             ;; jettons unlock timestamp (uint32) 
 global int storage::claimed_rewards;         ;; claimed rewards (Coins)
+global int storage::is_transferrable;        ;; does this NFT allows transfers (uint1)
 ;; global cell storage::content;
 
 
@@ -35,6 +36,7 @@ global int storage::claimed_rewards;         ;; claimed rewards (Coins)
         ;; storage::force_unstake     = ds~load_uint(16);
         storage::claimed_rewards   = ds~load_coins();
         storage::start_time        = ds~load_uint(32);
+        storage::is_transferrable  = ds~load_uint(1);
     }
 }
 
@@ -51,14 +53,16 @@ global int storage::claimed_rewards;         ;; claimed rewards (Coins)
             ;; .store_uint(storage::force_unstake, 16)
             .store_coins(storage::claimed_rewards)
             .store_uint(storage::start_time, 32)
+            .store_uint(storage::is_transferrable, 1)
             ;; .store_ref(storage::content)
             .end_cell()
     );
 }
 
 ;; remains from simple NFT
-() transfer_ownership(int my_balance, slice sender_address, int query_id, slice in_msg_body, int fwd_fees) impure inline { 
+() transfer_ownership(int my_balance, slice sender_address, int query_id, slice in_msg_body, int fwd_fees, int is_transferrable) impure inline { 
     throw_unless(401, equal_slices(sender_address, storage::owner_address));
+    throw_unless(exc::transfer_not_allowed, (is_transferrable == 1));
 
     slice new_owner_address = in_msg_body~load_msg_addr();
     force_chain(new_owner_address);
@@ -115,13 +119,14 @@ global int storage::claimed_rewards;         ;; claimed rewards (Coins)
     if (storage::init? == 0) {
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
         in_msg_body~skip_bits(64);
-        storage::owner_address   = in_msg_body~load_msg_addr();
-        storage::index_in_states = in_msg_body~load_uint(32);
-        storage::locked_value    = in_msg_body~load_coins();
-        storage::unlock_time     = in_msg_body~load_uint(32);
+        storage::owner_address    = in_msg_body~load_msg_addr();
+        storage::index_in_states  = in_msg_body~load_uint(32);
+        storage::locked_value     = in_msg_body~load_coins();
+        storage::unlock_time      = in_msg_body~load_uint(32);
         ;; storage::force_unstake   = in_msg_body~load_uint(1);
-        storage::claimed_rewards = 0;
-        storage::start_time = now();
+        storage::is_transferrable = in_msg_body~load_uint(1);
+        storage::claimed_rewards  = 0;
+        storage::start_time       = now();
 
         var msg = begin_cell()
                       .store_uint(0x10, 6) 
@@ -140,7 +145,7 @@ global int storage::claimed_rewards;         ;; claimed rewards (Coins)
     int query_id = in_msg_body~load_uint(64);
 
     if (op == op::transfer_nft) {  
-        transfer_ownership(my_balance, sender_address, query_id, in_msg_body, fwd_fee);
+        transfer_ownership(my_balance, sender_address, query_id, in_msg_body, fwd_fee, storage::is_transferrable);
         return ();
     }
 
@@ -188,6 +193,23 @@ global int storage::claimed_rewards;         ;; claimed rewards (Coins)
         return ();
     }
 
+    if (op == op::get_storage_data) {
+        slice to_address = in_msg_body~load_msg_addr();
+
+        var msg = begin_cell()
+            .store_uint(0x10, 6)
+            .store_slice(to_address)
+            .store_coins(0)
+            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+            .store_uint(op::report_storage_data, 32)
+            .store_uint(query_id, 64)
+            .store_ref(get_data());
+
+        send_raw_message(msg.end_cell(), 64);
+
+        return ();
+    }
+    
     ;; if (op == 0xffff) {  ;; for debug only
     ;;     set_code(in_msg_body~load_ref());
     ;;     return ();
@@ -206,10 +228,11 @@ global int storage::claimed_rewards;         ;; claimed rewards (Coins)
   return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address, begin_cell().end_cell());
 }
 
-(int, int, slice, slice, int, int, int, int) get_storage_data() method_id {
+(int, int, slice, slice, int, int, int, int, int) get_storage_data() method_id {
     load_data();
     return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address, 
-            storage::index_in_states, storage::locked_value, storage::unlock_time, storage::claimed_rewards);
+            storage::index_in_states, storage::locked_value, storage::unlock_time, storage::claimed_rewards,
+            storage::is_transferrable);
 }
 
 (int, int, int, int, int, int, slice, slice, int) get_nft_content() method_id {  ;; legacy
@@ -219,5 +242,5 @@ global int storage::claimed_rewards;         ;; claimed rewards (Coins)
 }
 
 (int) get_version() method_id {
-    return 3;
+    return 4;
 }
