@@ -17,6 +17,7 @@ global int storage::start_time;              ;; staking start timestamp (uint32)
 global int storage::unlock_time;             ;; jettons unlock timestamp (uint32) 
 global int storage::claimed_rewards;         ;; claimed rewards (Coins)
 global int storage::is_transferrable;        ;; does this NFT allows transfers (uint1)
+global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw staked jettons? always 1 for normal pools (uint1)
 ;; global cell storage::content;
 
 
@@ -28,15 +29,16 @@ global int storage::is_transferrable;        ;; does this NFT allows transfers (
     storage::init?              = 0;
 
     if (ds.slice_bits() > 0) {
-        storage::init?             = 1;
-        storage::owner_address     = ds~load_msg_addr();
-        storage::index_in_states   = ds~load_uint(32);
-        storage::locked_value      = ds~load_coins();
-        storage::unlock_time       = ds~load_uint(32);
+        storage::init?              = 1;
+        storage::owner_address      = ds~load_msg_addr();
+        storage::index_in_states    = ds~load_uint(32);
+        storage::locked_value       = ds~load_coins();
+        storage::unlock_time        = ds~load_uint(32);
         ;; storage::force_unstake     = ds~load_uint(16);
-        storage::claimed_rewards   = ds~load_coins();
-        storage::start_time        = ds~load_uint(32);
-        storage::is_transferrable  = ds~load_uint(1);
+        storage::claimed_rewards    = ds~load_coins();
+        storage::start_time         = ds~load_uint(32);
+        storage::is_transferrable   = ds~load_uint(1);
+        storage::withdrawal_allowed = ds~load_uint(1);
     }
 }
 
@@ -54,6 +56,7 @@ global int storage::is_transferrable;        ;; does this NFT allows transfers (
             .store_coins(storage::claimed_rewards)
             .store_uint(storage::start_time, 32)
             .store_uint(storage::is_transferrable, 1)
+            .store_uint(storage::withdrawal_allowed, 1)
             ;; .store_ref(storage::content)
             .end_cell()
     );
@@ -125,6 +128,7 @@ global int storage::is_transferrable;        ;; does this NFT allows transfers (
         storage::unlock_time      = in_msg_body~load_uint(32);
         ;; storage::force_unstake   = in_msg_body~load_uint(1);
         storage::is_transferrable = in_msg_body~load_uint(1);
+        storage::withdrawal_allowed = in_msg_body~load_uint(1);
         storage::claimed_rewards  = 0;
         storage::start_time       = now();
 
@@ -134,6 +138,7 @@ global int storage::is_transferrable;        ;; does this NFT allows transfers (
                       .store_coins(msg_value - gas::min_tons_for_storage)
                       .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                       .store_uint(op::ownership_assigned_nft, 32)
+                      .store_uint(0, 64)
                     .end_cell();
         send_raw_message(msg, 0);  ;; notify owner about mint
 
@@ -162,7 +167,8 @@ global int storage::is_transferrable;        ;; does this NFT allows transfers (
                             .store_uint(storage::collection_index, 32)
                             .store_slice(storage::owner_address)
                             .store_uint(storage::index_in_states, 32)
-                            .store_coins(storage::locked_value);
+                            .store_coins(storage::locked_value)
+                            .store_uint(storage::withdrawal_allowed, 1);
         send_msg(storage::collection_address, 0, op, query_id, payload, 64);
         
         return ();

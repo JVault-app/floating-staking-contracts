@@ -29,3 +29,4 @@ const int op::change_min_deposit     = 0x8;
 const int op::withdraw_accident_jettons = 0x9;
 const int op::change_start_time      = 0x84d1d850;
 const int op::premint                = 0x446077df;
+const int op::close_premint          = 0xcb900de;

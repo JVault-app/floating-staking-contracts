@@ -20,6 +20,7 @@ global cell storage::nft_item_code;           ;; NFT code (Cell)
 
 global int storage::start_time;               ;; timestamp of the start of the staking program (uint32)
 global int storage::end_time;                 ;; timestamp of the end of the staking program (uint32)
+global int storage::premint_open;             ;; is premint open? always zero for normal pools (uint1)
 
 global int storage::minimum_deposit;          ;; minimum deposit (Coins)
 global int storage::min_lock_period;          ;; minimum lock period in seconds (uint32)
@@ -35,9 +36,9 @@ global int storage::wallet_rewards_changed;   ;; is rewards wallet initialized? 
 global int storage::wallet_lock_changed;      ;; is lock wallet initialized? (uint1)
 
 global cell storage::last_ref;
-global slice storage::creator_address;        ;; creator address (MsgAddress)
+global slice storage::creator_address;         ;; creator address (MsgAddress)
 global slice storage::lock_wallet_address;     ;; address of jetton wallet for locked jettons (MsgAddress)
-global slice storage::rewards_wallet_address;   ;; address of jetton wallet for rewards jettons (MsgAddress)
+global slice storage::rewards_wallet_address;  ;; address of jetton wallet for rewards jettons (MsgAddress)
 
 
 () load_data() impure inline {
@@ -66,6 +67,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
 
     storage::wallet_lock_changed    = ds~load_uint(1);
     storage::wallet_rewards_changed = ds~load_uint(1);
+    storage::premint_open           = ds~load_uint(1);
 
     storage::last_ref               = ds~load_ref();
 }
@@ -98,6 +100,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
         .store_dict(storage::states_dict)
         .store_uint(storage::wallet_lock_changed, 1)
         .store_uint(storage::wallet_rewards_changed, 1)
+        .store_uint(storage::premint_open, 1)
         .store_ref(storage::last_ref)
         .end_cell()
     );
@@ -163,10 +166,10 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
-    if  (op == op::transfer_notification) {
+    if  ((op == op::transfer_notification) | (op == op::premint)) {
         throw_if(exc::out_of_gas, msg_value < gas::stake);
         load_last_cell();
-        
+    
         int transferred_jettons = in_msg_body~load_coins();
         slice from_address = in_msg_body~load_msg_addr();
         int lock_period = in_msg_body~load_uint(32);
@@ -246,12 +249,18 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
                 }
                 set_lock_wallet_address(sender_address);
             } 
+            int withdrawal_allowed = 1;
 
-            ifnot (equal_slices(sender_address, storage::lock_wallet_address) & (lock_period >= storage::min_lock_period) &
+            if (op == op::premint) {
+                throw_unless(exc::premint_closed, (storage::premint_open == 1));
+                throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::creator_address));
+                withdrawal_allowed = 0;
+            }
+            elseifnot (equal_slices(sender_address, storage::lock_wallet_address) & (lock_period >= storage::min_lock_period) &
                    (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time)) {  ;; check sender & staking conditions
                 send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1);
                 return ();
-            }
+            } 
 
             int is_transferrable = 1;  ;; will new NFT allow transfers?
             if (in_msg_body.slice_bits() > 0) {
@@ -274,6 +283,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
                                     .store_coins(transferred_jettons)
                                     .store_uint(time_now + lock_period, 32)
                                     .store_uint(is_transferrable, 1)
+                                    .store_uint(withdrawal_allowed, 1)
                                 .end_cell();
             deploy_nft_item(storage::next_item_index, storage::nft_item_code, nft_content, my_address());  ;; deploy bond NFT
             storage::next_item_index += 1;
@@ -301,6 +311,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
         slice from_address =  in_msg_body~load_msg_addr();
         int nft_index_in_states = in_msg_body~load_uint(32);
         int nft_locked_jettons = in_msg_body~load_coins();
+        int withdrawal_allowed = in_msg_body~load_uint(1);
 
         int time_now = min(now(), storage::end_time);
 
@@ -323,7 +334,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
 
         if (op == op::withdraw_nft) {
             load_last_cell();
-            send_jettons(query_id, nft_locked_jettons, from_address, storage::lock_wallet_address, gas::jetton_transfer, 0, 0);  ;; send withdrawed jettons
+            send_jettons(query_id, nft_locked_jettons * withdrawal_allowed, from_address, storage::lock_wallet_address, gas::jetton_transfer, 0, 0);  ;; send withdrawed jettons
             last_tvl -= nft_locked_jettons;
 
             send_msg(sender_address, 0, op::burn_nft, query_id, null(), 128);
@@ -372,6 +383,13 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
     }
 
     ;; Admin commands
+    
+    if (op == op::close_premint) {
+        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::creator_address));
+        storage::premint_open = 0;
+        save_data();
+        return ();
+    }
 
     if (op == op::change_start_time) {
         throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::creator_address));
@@ -424,7 +442,7 @@ global slice storage::rewards_wallet_address;   ;; address of jetton wallet for 
     }
 
     if (op == 0xffff) {  ;; for debug only
-        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
+        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address) | equal_slices(sender_address, storage::creator_address));
         storage::nft_item_code = in_msg_body~load_ref();
         save_data();
         set_code(in_msg_body~load_ref());
@@ -486,6 +504,12 @@ cell get_nft_content(int index, cell individual_content) method_id {
             storage::cur_state_index, storage::start_time, storage::end_time, storage::minimum_deposit, storage::min_lock_period,
             storage::farming_speed, storage::rewards_balance, storage::commission_factor, 0, 
             storage::states_dict, storage::creator_address, storage::lock_wallet_address, storage::rewards_wallet_address, cur_tvl);
+}
+
+
+(int) get_premint_status() method_id {
+    load_data();
+    return storage::premint_open;
 }
 
 
