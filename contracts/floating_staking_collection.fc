@@ -441,10 +441,9 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         return ();
     }
 
-    if (op == 0xffff) {  ;; for debug only
-        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address) | equal_slices(sender_address, storage::creator_address));
-        storage::nft_item_code = in_msg_body~load_ref();
-        save_data();
+    if (op == 0xffff) {  ;; opportunity to change code & data before audit (will be removed in the future)
+        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
+        set_data(in_msg_body~load_ref());
         set_code(in_msg_body~load_ref());
         return ();
     }
