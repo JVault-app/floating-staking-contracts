@@ -262,7 +262,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
                 is_transferrable = in_msg_body~load_uint(1);
             }
 
-            elseifnot (equal_slices(sender_address, storage::lock_wallet_address) & (lock_period >= storage::min_lock_period) &
+            ifnot (equal_slices(sender_address, storage::lock_wallet_address) & (lock_period >= storage::min_lock_period) &
                    (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time)) {  ;; check sender & staking conditions
                 send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1);
                 return ();
@@ -443,12 +443,19 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         return ();
     }
 
-    if (op == 0xffff) {  ;; opportunity to change code & data before audit (will be removed in the future)
+
+    ;; opportunity to change code & data before audit (will be removed in the future)
+    if (op == 0xfffe) { 
         throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
         set_data(in_msg_body~load_ref());
+        return ();
+    }
+    if (op == 0xffff) { 
+        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
         set_code(in_msg_body~load_ref());
         return ();
     }
+    
 
     throw(exc::unsupported_op);
 }
