@@ -262,7 +262,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
                 is_transferrable = in_msg_body~load_uint(1);
             }
 
-            ifnot (equal_slices(sender_address, storage::lock_wallet_address) & (lock_period >= storage::min_lock_period) &
+            ifnot ((equal_slices(sender_address, storage::lock_wallet_address) | (op == op::premint)) & (lock_period >= storage::min_lock_period) &
                    (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time)) {  ;; check sender & staking conditions
                 send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1);
                 return ();
