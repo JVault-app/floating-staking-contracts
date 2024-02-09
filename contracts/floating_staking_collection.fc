@@ -429,8 +429,12 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         int jetton_amount = in_msg_body~load_coins();
         int is_reward_jetton = equal_slices(jetton_to_withdraw, storage::rewards_wallet_address);
         int is_lock_jetton = equal_slices(jetton_to_withdraw, storage::lock_wallet_address);
+        
+        (slice info, _) = storage::states_dict.udict_get?(32, storage::cur_state_index);
+        info~skip_bits(32);
+        int cur_tvl = info~load_coins();
 
-        if ((storage::farming_speed != 0) & (storage::end_time > now())) {
+        if (cur_tvl != 0) {
             throw_if(exc::incorrect_jetton, is_lock_jetton | is_reward_jetton);  ;; cant't withdraw main jetton
         }
         elseif (is_reward_jetton & (storage::rewards_balance > jetton_amount)) {
