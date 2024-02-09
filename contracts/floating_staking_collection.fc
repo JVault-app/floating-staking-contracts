@@ -318,15 +318,20 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         int time_now = min(now(), storage::end_time);
 
         ;; calculate user's rewards
-        (slice info, _) = storage::states_dict.udict_get?(32, nft_index_in_states);  ;; data of previous action with NFT
+        (slice info, int success) = storage::states_dict~udict_delete_get?(32, nft_index_in_states);  ;; data of previous action with NFT
+        slice info2 = info;
+        throw_unless(exc::already_withdrawed, success);
         int prev_time = info~load_uint(32);
         int prev_tvl = info~load_coins();
         int prev_gained_rewards = info~load_uint(256);
 
-        (info, _) = storage::states_dict.udict_get?(32, storage::cur_state_index);  ;; last stored data
-        int last_time = info~load_uint(32);
-        int last_tvl = info~load_coins();
-        int last_gained_rewards = info~load_uint(256);
+        if (nft_index_in_states != storage::cur_state_index) {
+            (info2, _) = storage::states_dict.udict_get?(32, storage::cur_state_index);  ;; last stored data
+        }
+        
+        int last_time = info2~load_uint(32);
+        int last_tvl = info2~load_coins();
+        int last_gained_rewards = info2~load_uint(256);
 
         last_gained_rewards += muldiv((time_now - last_time) * storage::farming_speed, gained_rewards_devider, (farming_speed_devider * last_tvl));
         storage::cur_state_index += 1;
