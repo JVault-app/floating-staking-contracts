@@ -1,24 +1,23 @@
 #pragma version >=0.4.0;
 #include "imports/stdlib.fc";
 #include "imports/params.fc";
-#include "imports/op-codes.fc";
-#include "imports/exceptions.fc";
-#include "imports/gas.fc";
+#include "imports/constants.fc";
 #include "imports/utils.fc";
 
 
-global int storage::init?;                   ;; is NFT initialized? (uint1)
-global int storage::collection_index;        ;; index of this NFT in collection (uint32)
-global slice storage::collection_address;    ;; address of NFT collection (MsgAddress)
-global slice storage::owner_address;         ;; address of the NFT owner (MsgAddress)
-global int storage::index_in_states;         ;; index of this NFT in states_dict (uint32)
-global int storage::locked_value;            ;; amount of locked coins (Coins)
-global int storage::start_time;              ;; staking start timestamp (uint32)
-global int storage::unlock_time;             ;; jettons unlock timestamp (uint32) 
-global int storage::claimed_rewards;         ;; claimed rewards (Coins)
-global int storage::is_transferrable;        ;; does this NFT allows transfers (uint1)
-global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw staked jettons? always 1 for normal pools (uint1)
-;; global cell storage::content;
+global int storage::init?;                     ;; is NFT initialized? (uint1)
+global int storage::collection_index;          ;; index of this NFT in collection (uint32)
+global slice storage::collection_address;      ;; address of NFT collection (MsgAddress)
+global slice storage::owner_address;           ;; address of the NFT owner (MsgAddress)
+global int storage::locked_value;              ;; amount of locked coins (Coins)
+global int storage::start_time;                ;; staking start timestamp (uint32)
+global int storage::unlock_time;               ;; jettons unlock timestamp (uint32) 
+global int storage::claimed_rewards;           ;; claimed rewards (Coins)
+global int storage::is_transferrable;          ;; does this NFT allows transfers (uint1)
+global int storage::withdrawal_allowed;        ;; does this NFT allow to withdraw staked jettons? always 1 for normal pools (uint1)
+global int storage::is_active;                 ;; does this NFT accept any actions with it (uint1)
+
+global int storage::distributed_rewards;       ;; rewards that were distributed in staking pool for the time of last action with NFT (uint256)
 
 
 () load_data() impure inline {
@@ -29,16 +28,17 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
     storage::init?              = 0;
 
     if (ds.slice_bits() > 0) {
-        storage::init?              = 1;
-        storage::owner_address      = ds~load_msg_addr();
-        storage::index_in_states    = ds~load_uint(32);
-        storage::locked_value       = ds~load_coins();
-        storage::unlock_time        = ds~load_uint(32);
-        ;; storage::force_unstake     = ds~load_uint(16);
-        storage::claimed_rewards    = ds~load_coins();
-        storage::start_time         = ds~load_uint(32);
-        storage::is_transferrable   = ds~load_uint(1);
-        storage::withdrawal_allowed = ds~load_uint(1);
+        storage::init?               = 1;
+        storage::owner_address       = ds~load_msg_addr();
+        storage::locked_value        = ds~load_coins();
+        storage::unlock_time         = ds~load_uint(32);
+        storage::claimed_rewards     = ds~load_coins();
+        storage::start_time          = ds~load_uint(32);
+        storage::is_transferrable    = ds~load_uint(1);
+        storage::withdrawal_allowed  = ds~load_uint(1);
+        storage::is_active           = ds~load_uint(1);
+        ds = ds~load_ref().begin_parse();
+        storage::distributed_rewards = ds~load_uint(256);
     }
 }
 
@@ -49,15 +49,18 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
             .store_uint(storage::collection_index, 32)
             .store_slice(storage::collection_address)
             .store_slice(storage::owner_address)
-            .store_uint(storage::index_in_states, 32)
             .store_coins(storage::locked_value)
             .store_uint(storage::unlock_time, 32)
-            ;; .store_uint(storage::force_unstake, 16)
             .store_coins(storage::claimed_rewards)
             .store_uint(storage::start_time, 32)
             .store_uint(storage::is_transferrable, 1)
             .store_uint(storage::withdrawal_allowed, 1)
-            ;; .store_ref(storage::content)
+            .store_uint(storage::is_active, 1)
+            .store_ref(
+                begin_cell()
+                    .store_uint(storage::distributed_rewards, 256)
+                .end_cell()
+            )
             .end_cell()
     );
 }
@@ -117,24 +120,23 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
     cs~load_coins();  ;; skip ihr_fee
     int fwd_fee = muldiv(cs~load_coins(), 3, 1);  ;; we use message fwd_fee for estimation of forward_payload costs
 
-
     load_data();
     if (storage::init? == 0) {
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
         in_msg_body~skip_bits(64);
-        storage::owner_address    = in_msg_body~load_msg_addr();
-        storage::index_in_states  = in_msg_body~load_uint(32);
-        storage::locked_value     = in_msg_body~load_coins();
-        storage::unlock_time      = in_msg_body~load_uint(32);
-        ;; storage::force_unstake   = in_msg_body~load_uint(1);
-        storage::is_transferrable = in_msg_body~load_uint(1);
-        storage::withdrawal_allowed = in_msg_body~load_uint(1);
-        storage::claimed_rewards  = 0;
-        storage::start_time       = now();
+        storage::owner_address       = in_msg_body~load_msg_addr();
+        storage::locked_value        = in_msg_body~load_coins();
+        storage::start_time          = in_msg_body~load_uint(32);
+        storage::unlock_time         = in_msg_body~load_uint(32);
+        storage::distributed_rewards = in_msg_body~load_uint(256);
+        storage::is_transferrable    = in_msg_body~load_uint(1);
+        storage::withdrawal_allowed  = in_msg_body~load_uint(1);
+        storage::is_active           = 1;
+        storage::claimed_rewards     = 0;
 
         var msg = begin_cell()
                       .store_uint(0x10, 6) 
-                      .store_slice(storage::owner_address)  ;; previous owner address
+                      .store_slice(storage::owner_address)
                       .store_coins(msg_value - gas::min_tons_for_storage)
                       .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                       .store_uint(op::ownership_assigned_nft, 32)
@@ -155,6 +157,9 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
     }
 
     if ((op == op::claim_nft) | (op == op::withdraw_nft)) {  ;; withdraw rewards or close position
+        throw_unless(exc::incorrect_sender, equal_slices(storage::owner_address, sender_address));
+        throw_unless(exc::already_withdrawed, storage::is_active == 1);
+        
         if (op == op::withdraw_nft) {
             throw_unless(exc::out_of_gas, msg_value >= gas::withdraw_nft);
             throw_unless(exc::not_unlocked_yet, now() >= storage::unlock_time);
@@ -162,34 +167,35 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
         else {
             throw_unless(exc::out_of_gas, msg_value >= gas::claim_nft);
         }
-        throw_unless(exc::incorrect_sender, equal_slices(storage::owner_address, sender_address));
+
         builder payload = begin_cell()
                             .store_uint(storage::collection_index, 32)
                             .store_slice(storage::owner_address)
-                            .store_uint(storage::index_in_states, 32)
                             .store_coins(storage::locked_value)
+                            .store_uint(storage::distributed_rewards, 256)
                             .store_uint(storage::withdrawal_allowed, 1);
         send_msg(storage::collection_address, 0, op, query_id, payload, 64);
-        
+        storage::is_active = 0;
+
+        save_data();
         return ();
     }
 
     if (op == op::change_state_nft) {  ;;  change nft state after claim
         throw_unless(exc::incorrect_sender, equal_slices(storage::collection_address, sender_address));
-        storage::index_in_states = in_msg_body~load_uint(32);
-        storage::claimed_rewards = in_msg_body~load_coins();
 
+        storage::distributed_rewards = in_msg_body~load_uint(256);
+        storage::claimed_rewards += in_msg_body~load_coins();
+
+        ifnot (in_msg_body~load_uint(1)) {
+            send_msg(storage::owner_address, 0, op::excesses, query_id, null(), 128);
+            storage::owner_address = burn_address;
+        }
+        else {
+            storage::is_active = 1;
+        }
+    
         save_data();
-        return ();
-    }
-
-    if (op == op::burn_nft) {  ;; burn nft after unstaking
-        throw_unless(exc::incorrect_sender, equal_slices(storage::collection_address, sender_address));
-        slice prev_owner = storage::owner_address;
-        storage::owner_address = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"a;
-        save_data();
-
-        send_msg(prev_owner, 0, op::excesses, query_id, null(), 128);        
         return ();
     }
 
@@ -216,11 +222,6 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
         return ();
     }
     
-    ;; if (op == 0xffff) {  ;; for debug only
-    ;;     set_code(in_msg_body~load_ref());
-    ;;     return ();
-    ;; }
-    
     throw(0xffff);
 }
 
@@ -234,20 +235,20 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
   return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address, begin_cell().end_cell());
 }
 
-(int, int, slice, slice, int, int, int, int, int) get_storage_data() method_id {
+(int, int, slice, slice, int, int, int, int, int, int, int) get_storage_data() method_id {
     load_data();
-    return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address, 
-            storage::index_in_states, storage::locked_value, storage::unlock_time, storage::claimed_rewards,
-            storage::is_transferrable);
+    return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address,
+            storage::locked_value, storage::start_time, storage::unlock_time, storage::claimed_rewards,
+            storage::is_transferrable, storage::is_active, storage::distributed_rewards);
 }
 
-(int, int, int, int, int, int, slice, slice, int, int) get_nft_content() method_id {  ;; legacy
+(int, int, int, int, int, int, slice, slice, int, int, int) get_nft_content() method_id {  ;; legacy
     load_data();
     return (storage::claimed_rewards, storage::start_time, storage::unlock_time - storage::start_time,
              storage::locked_value, 0, storage::collection_index, storage::owner_address, 
-             storage::collection_address, storage::index_in_states, storage::is_transferrable);
+             storage::collection_address, storage::is_transferrable, storage::is_active, storage::distributed_rewards);
 }
 
 (int) get_version() method_id {
-    return 4;
+    return 5;
 }

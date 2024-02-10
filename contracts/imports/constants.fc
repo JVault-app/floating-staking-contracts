@@ -1,0 +1,68 @@
+{- EXCEPTIONS -}
+
+const int exc::out_of_gas = 13;
+const int exc::less_than_min_deposit = 41;
+const int exc::pool_active = 42;
+const int exc::incorrect_jetton = 43;
+const int exc::not_unlocked_yet = 44;
+const int exc::incorrect_input = 45;
+const int exc::not_enough_jettons = 46;
+const int exc::incorrect_lock_period = 47;
+const int exc::staking_not_started = 48;
+const int exc::not_enough_ton_for_fees = 49;
+const int exc::incorrect_sender = 50;
+const int exc::transfer_not_allowed = 51;
+const int exc::premint_closed = 52;
+const int exc::already_withdrawed = 53;
+const int exc::unsupported_op = 0xffff;
+
+
+{- GAS -}
+
+const int gas::provide_addr          = 100000000;  ;; 0.10 TON
+const int gas::stake                 = 100000000;  ;; 0.10 TON
+const int gas::jetton_transfer       = 55000000;   ;; 0.055 TON
+const int gas::change_state_nft      = 10000000;   ;; 0.01 TON
+const int gas::claim_nft             = 200000000;  ;; 0.20 TON
+const int gas::withdraw_nft          = 300000000;  ;; 0.30 TON
+const int gas::min_tons_for_storage  = 50000000;   ;; 0.05 TON
+
+
+{- OP-CODES -}
+
+;; Common
+const int op::get_static_data        = 0x2fcb26a2;
+const int op::report_static_data     = 0x8b771735;
+const int op::get_storage_data       = 0x5b88e5cc;
+const int op::report_storage_data    = 0xaab4a8ef;
+const int op::excesses               = 0xd53276db;
+
+;; Jettons
+const int op::transfer_jetton        = 0xf8a7ea5;
+const int op::transfer_notification  = 0x7362d09c;
+const int op::provide_wallet_address = 0x2c76b973;
+const int op::take_wallet_address    = 0xd1735400;
+
+;; NFT
+const int op::transfer_nft           = 0x5fcc3d14;
+const int op::ownership_assigned_nft = 0x05138d91;
+const int op::claim_nft              = 0xa769de27;
+const int op::withdraw_nft           = 0xb5de5f9e;
+const int op::change_state_nft       = 0xdca3da4c;
+
+;; NFT-collection
+const int op::report_royalty_params  = 0xa8cb00ad;
+const int op::change_start_time      = 0x84d1d850;
+const int op::premint                = 0x446077df;
+const int op::close_premint          = 0xcb900de;
+const int op::withdraw_rewards       = 0x7;
+const int op::change_min_deposit     = 0x8;
+const int op::withdraw_accident_jettons = 0x9;
+
+
+{- OTHER -}
+
+const int commission_devider = 100000;
+const int farming_speed_devider = 24 * 60 * 60;
+const int distributed_rewards_devider = 1000000000000000000000000000000;
+const slice burn_address = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"a;
