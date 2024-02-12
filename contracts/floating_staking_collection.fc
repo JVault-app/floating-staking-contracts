@@ -300,6 +300,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
             
             send_msg(from_address, 0, op::excesses, query_id, null(), 128);  ;; change NFT state description
         }
+        storage::last_update_time = time_now;
         
         save_data();
         return ();
