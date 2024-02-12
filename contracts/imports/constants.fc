@@ -19,7 +19,7 @@ const int exc::unsupported_op = 0xffff;
 
 {- GAS -}
 
-const int gas::provide_addr          = 100000000;  ;; 0.10 TON
+const int gas::provide_addr          = 20000000;   ;; 0.02 TON
 const int gas::stake                 = 100000000;  ;; 0.10 TON
 const int gas::jetton_transfer       = 55000000;   ;; 0.055 TON
 const int gas::change_state_nft      = 10000000;   ;; 0.01 TON
@@ -53,6 +53,7 @@ const int op::change_state_nft       = 0xdca3da4c;
 ;; NFT-collection
 const int op::report_royalty_params  = 0xa8cb00ad;
 const int op::change_start_time      = 0x84d1d850;
+const int op::change_lock_period     = 0x404e760b;
 const int op::premint                = 0x446077df;
 const int op::close_premint          = 0xcb900de;
 const int op::withdraw_rewards       = 0x7;

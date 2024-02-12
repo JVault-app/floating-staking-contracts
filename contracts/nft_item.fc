@@ -105,14 +105,18 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     if (in_msg_body.slice_empty?()) { ;; ignore empty messages
         return ();
     }
+    load_data();
 
     slice cs = in_msg_full.begin_parse();
     int flags = cs~load_uint(4);
-
-    if (flags & 1) {  ;; ignore all bounced messages
+    slice sender_address = cs~load_msg_addr();
+    if (flags & 1) { 
+        if (equal_slices(sender_address, storage::collection_address)) {
+            storage::is_active = 1;
+            save_data();
+        }
         return ();
     }
-    slice sender_address = cs~load_msg_addr();
 
     cs~load_msg_addr();  ;; skip dst
     cs~load_coins();  ;; skip value
@@ -120,7 +124,6 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     cs~load_coins();  ;; skip ihr_fee
     int fwd_fee = muldiv(cs~load_coins(), 3, 1);  ;; we use message fwd_fee for estimation of forward_payload costs
 
-    load_data();
     if (storage::init? == 0) {
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
         in_msg_body~skip_bits(64);
@@ -158,7 +161,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 
     if ((op == op::claim_nft) | (op == op::withdraw_nft)) {  ;; withdraw rewards or close position
         throw_unless(exc::incorrect_sender, equal_slices(storage::owner_address, sender_address));
-        throw_unless(exc::already_withdrawed, storage::is_active == 1);
+        throw_unless(exc::already_withdrawed, (storage::is_active == 1));
         
         if (op == op::withdraw_nft) {
             throw_unless(exc::out_of_gas, msg_value >= gas::withdraw_nft);
@@ -168,13 +171,23 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
             throw_unless(exc::out_of_gas, msg_value >= gas::claim_nft);
         }
 
-        builder payload = begin_cell()
+        cell msg_body = begin_cell()
+                            .store_uint(op, 32)
+                            .store_uint(query_id, 64)
                             .store_uint(storage::collection_index, 32)
                             .store_slice(storage::owner_address)
                             .store_coins(storage::locked_value)
                             .store_uint(storage::distributed_rewards, 256)
-                            .store_uint(storage::withdrawal_allowed, 1);
-        send_msg(storage::collection_address, 0, op, query_id, payload, 64);
+                            .store_uint(storage::withdrawal_allowed, 1)
+                        .end_cell();
+        builder msg = begin_cell()
+                        .store_uint(0x18, 6) 
+                        .store_slice(storage::collection_address)
+                        .store_coins(0)
+                        .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                        .store_ref(msg_body);
+
+        send_raw_message(msg.end_cell(), 64);
         storage::is_active = 0;
 
         save_data();
