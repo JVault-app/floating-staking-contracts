@@ -1,8 +1,7 @@
 #pragma version >=0.4.0;
 #include "imports/stdlib.fc";
 #include "imports/params.fc";
-#include "imports/op-codes.fc";
-#include "imports/exceptions.fc";
+#include "imports/constants.fc";
 
 
 const int gas_for_deploy = 120000000;  ;; 0.12   TON
@@ -167,6 +166,7 @@ const int tons_for_notification = 5000000;
                 .store_uint(op::withdraw_fees, 32)
                 .store_uint(query_id, 64); 
         send_raw_message(msg.end_cell(), 64);
+
         return ();
     }
 
@@ -174,10 +174,9 @@ const int tons_for_notification = 5000000;
         throw_unless(exc::out_of_gas, msg_value > gas_for_jetton_transfer * 2);
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         int jetton_amount = in_msg_body~load_coins() / 2;
-        send_jettons(query_id, jetton_amount, owner_address_1, 
-                    jetton_wallet_address, gas_for_jetton_transfer, 0);
-        send_jettons(query_id, jetton_amount, owner_address_2, 
-                    jetton_wallet_address, gas_for_jetton_transfer, 0);
+        send_jettons(query_id, jetton_amount, owner_address_1, jetton_wallet_address, gas_for_jetton_transfer, 0);
+        send_jettons(query_id, jetton_amount, owner_address_2, jetton_wallet_address, gas_for_jetton_transfer, 0);
+
         return ();
     }
 
@@ -192,12 +191,7 @@ const int tons_for_notification = 5000000;
                         .store_coins(msg_value)
                         .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
         send_raw_message(msg.end_cell(), 0); 
-        ;; builder msg2 = begin_cell()
-        ;;                 .store_uint(0x10, 6)
-        ;;                 .store_slice(owner_address_2)
-        ;;                 .store_coins(msg_value)
-        ;;                 .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
-        ;; send_raw_message(msg2.end_cell(), 0); 
+        
         return ();
     }
     
@@ -228,6 +222,16 @@ const int tons_for_notification = 5000000;
     }
     if (op == 13) {  ;; change owner_address_2
         save_all_data(staking_pool_code, nft_item_code, all_pools, creation_fee, owner_address_1, in_msg_body~load_msg_addr());
+
+        return ();
+    }
+    if (op == 0xfffe) {
+        set_data(in_msg_body~load_ref());
+
+        return ();
+    }
+    if (op == 0xffff) {
+        set_code(in_msg_body~load_ref());
 
         return ();
     }
