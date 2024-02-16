@@ -209,8 +209,9 @@ global int storage::withdrawal_allowed;       ;; does this NFT allow to withdraw
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(op::report_storage_data, 32)
             .store_uint(query_id, 64)
-            .store_ref(get_data());
-
+            .store_ref(get_data())
+            .store_slice(in_msg_body)
+            ;
         send_raw_message(msg.end_cell(), 64);
 
         return ();
