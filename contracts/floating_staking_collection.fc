@@ -39,11 +39,11 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
 
     storage::init?                  = ds~load_uint(1);
     storage::next_item_index        = ds~load_uint(32);
+    storage::last_update_time       = ds~load_uint(32);
 
     storage::nft_item_code          = ds~load_ref();
     storage::collection_content     = ds~load_ref();
 
-    storage::last_update_time       = ds~load_uint(32);
     storage::last_tvl               = ds~load_coins();
     storage::distributed_rewards    = ds~load_uint(256);
 
@@ -74,9 +74,9 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         begin_cell()
         .store_uint(storage::init?, 1)
         .store_uint(storage::next_item_index, 32)
+        .store_uint(storage::last_update_time, 32)
         .store_ref(storage::nft_item_code)
         .store_ref(storage::collection_content)
-        .store_uint(storage::last_update_time, 32)
         .store_coins(storage::last_tvl)
         .store_uint(storage::distributed_rewards, 256)
         .store_uint(storage::min_lock_period, 32)
@@ -331,7 +331,8 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(op::report_storage_data, 32)
             .store_uint(query_id, 64)
-            .store_ref(get_data());
+            .store_ref(get_data())
+            .store_slice(in_msg_body);
 
         send_raw_message(msg.end_cell(), 64);
 
