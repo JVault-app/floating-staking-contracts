@@ -21,10 +21,12 @@ const int tons_for_notification = 5000000;
 ;; }
 
 
-() save_all_data(cell staking_pool_code, cell nft_item_code,  cell all_pools, 
+() save_all_data(slice stakinig_jvt_address, cell staking_pool_code, cell nft_item_code,  cell all_pools, 
              int creation_fee, slice owner_address_1, slice owner_address_2) impure {
 
     set_data(begin_cell()
+                .store_slice(stakinig_jvt_address)
+                .store_ref(sharecoms_code)
                 .store_ref(all_pools)
                 .store_ref(staking_pool_code)
                 .store_ref(nft_item_code)
@@ -94,13 +96,15 @@ const int tons_for_notification = 5000000;
     int query_id = in_msg_body~load_uint(64);
 
     slice ds = get_data().begin_parse();
+    slice stakinig_jvt_address = ds~load_msg_addr();
+    cell sharecoms_code = ds~load_ref();
     cell all_pools = ds~load_ref();
     (slice other_data, cell staking_pool_code) = ds.load_ref();
     (cell nft_item_code, int creation_fee) = (other_data~load_ref(), other_data~load_coins());
 
     if (op == 1) {  ;; deploy new pool
         throw_unless(exc::not_enough_ton_for_fees, msg_value > creation_fee + gas_for_deploy);
-
+        
         cell data = begin_cell()
                         .store_uint(0, 65)
                         .store_ref(nft_item_code)
@@ -128,14 +132,6 @@ const int tons_for_notification = 5000000;
                         .store_ref(begin_cell().end_cell()); 
         send_raw_message(msg.end_cell(), 0);
 
-        builder msg = begin_cell()
-                        .store_uint(0x18, 6)
-                        .store_slice(sender_address)
-                        .store_coins(msg_value - gas_for_deploy - creation_fee)
-                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-                        .store_uint(op::excesses, 32)
-                        .store_uint(query_id, 64);
-        send_raw_message(msg.end_cell(), 0);
         
         slice pools_slice = all_pools.begin_parse();
         if (pools_slice.slice_bits() < 768) {  ;; less than 3 addresses in last cell
@@ -144,6 +140,84 @@ const int tons_for_notification = 5000000;
         else {
             save_new_pool(begin_cell().store_slice(pool_address).store_ref(all_pools).end_cell(), ds);
         }
+
+        cell collection_content     = ds~load_ref();
+
+        int last_tvl               = ds~load_coins();
+        int distributed_rewards    = ds~load_uint(256);
+
+        int min_lock_period        = ds~load_uint(32);
+        int farming_speed          = ds~load_coins();
+
+        slice rewards_wallet_address = ds~load_msg_addr();
+        int rewards_balance        = ds~load_coins();
+        int commission_factor      = ds~load_uint(16);
+
+        int wallet_lock_changed    = ds~load_uint(1);
+        int wallet_rewards_changed = ds~load_uint(1);
+        int premint_open           = ds~load_uint(1);
+
+        ds = ds~load_ref().begin_parse();
+        int start_time             = ds~load_uint(32);
+        int end_time               = ds~load_uint(32);
+        int minimum_deposit        = ds~load_coins();
+
+        slice lock_wallet_address    = ds~load_msg_addr();
+        slice admin_address          = ds~load_msg_addr();
+        slice creator_address        = ds~load_msg_addr();
+
+        cell sharecoms_data = begin_cell()
+                                .store_uint(0, 1)
+                                .store_uint(0, 32)
+                                .store_ref(
+                                    begin_cell()
+                                        .store_slice(lock_wallet_address)
+                                        .store_slice(stakinig_jvt_address)
+                                    .end_cell()
+                                )
+                                .store_ref(
+                                    begin_cell()
+                                    .store_slice(stakinig_jvt_address)
+                                    .store_ref(nft_item_code)
+                                    .end_cell()
+                                )
+                                .store_dict(new_dict())
+                                .sotre_dict(new_dict())
+                            .end_cell();
+        
+        cell sharecoms_state_init = begin_cell()
+                                .store_uint(0, 2)
+                                .store_dict(sharecoms_code)
+                                .store_dict(sharecoms_data)
+                                .store_uint(0, 1)
+                            .end_cell();
+
+        slice sharecoms_address = begin_cell()
+                                .store_uint(4, 3)
+                                .store_int(workchain(), 8)
+                                .store_uint(cell_hash(sharecoms_state_init), 256)
+                            .end_cell().begin_parse();
+                            
+        builder msg = begin_cell()
+                        .store_uint(0x18, 6)
+                        .store_slice(sharecoms_address)
+                        .store_coins(gas_for_deploy)
+                        .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+                        .store_ref(sharecoms_state_init)
+                        .store_ref(begin_cell().end_cell());
+         
+        send_raw_message(msg.end_cell(), 0);
+        ;; NEED TO CHANGE
+        raw_reserve(0,4);
+        
+        builder msg = begin_cell()
+                        .store_uint(0x18, 6)
+                        .store_slice(sender_address)
+                        .store_coins(0)
+                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                        .store_uint(op::excesses, 32)
+                        .store_uint(query_id, 64);
+        send_raw_message(msg.end_cell(), 128);
 
         return ();
     }
