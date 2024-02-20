@@ -2,82 +2,141 @@
 #include "imports/stdlib.fc";
 #include "imports/params.fc";
 #include "imports/constants.fc";
+#include "imports/utils.fc";
+
+global int   storage::creation_fee;
+global slice storage::jvt_staking_address;
+global slice storage::jvt_wallet_address;
+global slice storage::team_address;
+global slice storage::conversion_address;
+
+global cell  storage::sharecoms_code;
+global cell  storage::staking_pool_code;
+global cell  storage::nft_item_code;
+;; global cell  storage::all_pools;
 
 
-const int gas_for_deploy = 120000000;  ;; 0.12   TON
-const int gas_for_jetton_transfer = 100000000;  ;; 0.1 TON
-const int min_withdrawable_amount = 100000000;  ;; 0.1 TON
-const int min_tons_for_storage = 50000000;  ;; 0.05 TON
-const int tons_for_notification = 5000000;
-
-;; (cell, int) load_data() {
-;;     var ds = get_data().begin_parse();
-;;     return (
-;;         ds~load_ref(),  ;; staking_pool_code
-;;         ds~load_coins(),  ;; creation_fee
-;;         ds~load_msg_addr(),  ;; owner_address
-;;         ds~load_msg_addr()  ;; burning_addr
-;;         );  
-;; }
-
-
-() save_all_data(slice stakinig_jvt_address, cell sharecoms_code, cell staking_pool_code, cell nft_item_code,  cell all_pools, 
-             int creation_fee, slice owner_address, slice burning_addr) impure {
-
-    set_data(begin_cell()
-                .store_slice(stakinig_jvt_address)
-                .store_ref(sharecoms_code)
-                .store_ref(all_pools)
-                .store_ref(staking_pool_code)
-                .store_ref(nft_item_code)
-                .store_coins(creation_fee)
-                .store_slice(owner_address)
-                .store_slice(burning_addr)
-            .end_cell());
+() save_data() impure inline {
+    set_data(
+        begin_cell()
+            .store_coins(storage::creation_fee)
+            .store_slice(storage::jvt_staking_address)
+            .store_slice(storage::jvt_wallet_address)
+            .store_ref(storage::sharecoms_code)
+            .store_ref(storage::staking_pool_code)
+            .store_ref(storage::nft_item_code)
+            .store_ref(
+                begin_cell()
+                    .store_slice(storage::team_address)
+                    .store_slice(storage::conversion_address)
+                .end_cell()
+            )
+        .end_cell()
+    );
 }
 
 
-() save_new_pool(cell all_pools, slice other_data) impure inline {
-    set_data(begin_cell().store_ref(all_pools).store_slice(other_data).end_cell());
+() load_data() impure inline {
+    slice ds = get_data().begin_parse();
+    storage::creation_fee        = ds~load_coins();
+    storage::jvt_staking_address = ds~load_msg_addr();
+    storage::jvt_wallet_address  = ds~load_msg_addr();
+    storage::sharecoms_code      = ds~load_ref();
+    storage::staking_pool_code   = ds~load_ref();
+    storage::nft_item_code       = ds~load_ref();
+
+    slice owners = ds~load_ref().begin_parse();
+    storage::team_address        = owners~load_msg_addr();
+    storage::conversion_address  = owners~load_msg_addr(); 
 }
 
 
-() send_jettons(int query_id, int jetton_amount, slice to_address, slice jetton_wallet_address, 
-                int msg_value, int sending_mode) impure inline {
+slice deploy_staking_pool(slice pool_content) impure inline {
+    ;; deploys new staking pool contract and returns its address
+    cell pool_data = begin_cell()
+                        .store_uint(0, 65)
+                        .store_ref(storage::nft_item_code)
+                        .store_slice(pool_content)
+                    .end_cell();
 
-    builder msg = begin_cell()
-                .store_uint(0x10, 6) 
-                .store_slice(jetton_wallet_address)
-                .store_coins(msg_value)
-                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
-                .store_uint(1, 1)
-                .store_ref(
-                    begin_cell()
-                        .store_uint(op::transfer_jetton, 32)
-                        .store_uint(query_id, 64)
-                        .store_coins(jetton_amount)
-                        .store_slice(to_address)
-                        .store_slice(to_address)
-                        .store_uint(0, 1)
-                        .store_coins(1)
-                        .store_uint(0, 1)
-                    .end_cell()
-                );
-            
-    send_raw_message(msg.end_cell(), sending_mode);  
+    cell pool_state_init = begin_cell()
+                                .store_uint(0, 2)
+                                .store_dict(storage::staking_pool_code)
+                                .store_dict(pool_data)
+                                .store_uint(0, 1)
+                            .end_cell();
+
+    slice pool_address = begin_cell()
+                            .store_uint(4, 3)
+                            .store_int(workchain(), 8)
+                            .store_uint(cell_hash(pool_state_init), 256)
+                        .end_cell().begin_parse();
+
+    builder pool_deploy_msg = begin_cell()
+                                .store_uint(0x18, 6)
+                                .store_slice(pool_address)
+                                .store_coins(gas::deploy_pool)
+                                .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+                                .store_ref(pool_state_init)
+                                .store_ref(begin_cell().end_cell());
+
+    send_raw_message(pool_deploy_msg.end_cell(), 0);
+
+    return pool_address;
 }
 
 
-() notify_owner(slice owner_address, int msg_value,  slice msg) impure inline {
+slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure inline {
+    ;; deploys new sharecoms contract and returns its address
+    cell sharecoms_data = begin_cell()
+                                .store_slice(pool_address)
+                                .store_slice(my_address())
+                            .end_cell();
+
+    cell sharecoms_state_init = begin_cell()
+                                    .store_uint(0, 2)
+                                    .store_dict(storage::sharecoms_code)
+                                    .store_dict(sharecoms_data)
+                                    .store_uint(0, 1)
+                                .end_cell();
+
+    slice sharecoms_address = begin_cell()
+                                    .store_uint(4, 3)
+                                    .store_int(workchain(), 8)
+                                    .store_uint(cell_hash(sharecoms_state_init), 256)
+                                .end_cell().begin_parse();
+
+    cell sharecoms_init_body = begin_cell()
+                                    .store_slice(storage::jvt_staking_address)
+                                    .store_slice(rewards_jetton_address)
+                                    .store_ref(storage::nft_item_code)
+                                .end_cell();
+
+    builder sharecoms_deploy_msg = begin_cell()
+                                        .store_uint(0x18, 6)
+                                        .store_slice(sharecoms_address)
+                                        .store_coins(gas::deploy_sharecoms)
+                                        .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+                                        .store_ref(sharecoms_state_init)
+                                        .store_ref(sharecoms_init_body);
+
+    send_raw_message(sharecoms_deploy_msg.end_cell(), 0);  
+
+    return sharecoms_address; 
+}
+
+
+() notify_owner(slice comment) impure inline {
     builder msg = begin_cell()
             .store_uint(0x18, 6) 
-            .store_slice(owner_address)
-            .store_coins(msg_value)
+            .store_slice(storage::team_address)
+            .store_coins(gas::notification)
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(0, 32)
-            .store_slice(msg);
+            .store_slice(comment);
     send_raw_message(msg.end_cell(), 0);
 }
+
 
 () recv_internal(int my_balance, int msg_value, cell in_msg_full, slice in_msg_body) impure {
     if (in_msg_body.slice_empty?()) { ;; ignore empty messages
@@ -94,213 +153,91 @@ const int tons_for_notification = 5000000;
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
-    slice ds = get_data().begin_parse();
-    slice stakinig_jvt_address = ds~load_msg_addr();
-    cell sharecoms_code = ds~load_ref();
-    cell all_pools = ds~load_ref();
-    (slice other_data, cell staking_pool_code) = ds.load_ref();
-    (cell nft_item_code, int creation_fee) = (other_data~load_ref(), other_data~load_coins());
+    load_data();
 
-    if (op == 1) {  ;; deploy new pool
-        throw_unless(exc::not_enough_ton_for_fees, msg_value > creation_fee + gas_for_deploy);
-        raw_reserve(0,4);    
-        cell data = begin_cell()
-                        .store_uint(0, 65)
-                        .store_ref(nft_item_code)
-                        .store_slice(in_msg_body)
-                    .end_cell();
+    if (op == op::transfer_notification) {  ;; someone sent jettons to this pool
+        raw_reserve(0, 4);
 
-        cell state_init = begin_cell()
-                                .store_uint(0, 2)
-                                .store_dict(staking_pool_code)
-                                .store_dict(data)
-                                .store_uint(0, 1)
-                            .end_cell();
-        slice pool_address = begin_cell()
-                                .store_uint(4, 3)
-                                .store_int(workchain(), 8)
-                                .store_uint(cell_hash(state_init), 256)
-                            .end_cell().begin_parse();
-                            
-        builder msg = begin_cell()
-                        .store_uint(0x18, 6)
-                        .store_slice(pool_address)
-                        .store_coins(gas_for_deploy)
-                        .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
-                        .store_ref(state_init)
-                        .store_ref(begin_cell().end_cell());
+        int   jetton_amount = in_msg_body~load_coins();
+        slice from_address  = in_msg_body~load_msg_addr();
+        int   inner_op      = in_msg_body~load_uint(32);
 
-        send_raw_message(msg.end_cell(), 0);
+        if (inner_op == op::deploy_new_pool) {
+            throw_unless(exc::out_of_gas, msg_value > gas::deploy_pool + gas::deploy_sharecoms + gas::burn_jetton);
+            throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::jvt_wallet_address));
+            if (jetton_amount < storage::creation_fee) {
+                send_jettons(query_id, jetton_amount, from_address, sender_address, 0, 64, 1, 1, null());
+                return ();
+            }
 
-        
-        slice pools_slice = all_pools.begin_parse();
-        if (pools_slice.slice_bits() < 768) {  ;; less than 3 addresses in last cell
-            save_new_pool(begin_cell().store_slice(pool_address).store_slice(pools_slice).end_cell(), ds);
+            slice pool_content = in_msg_body~load_ref().begin_parse();   ;; user-created content of the new staking pool
+            slice rewards_jetton_address = in_msg_body~load_msg_addr();  ;; address of rewards jetton of the new staking pool
+            slice pool_address = deploy_staking_pool(pool_content);
+            slice sharecoms_address = deploy_sharecoms(rewards_jetton_address, pool_address);
+
+            burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, 0, 128);  ;; burn fees   
+            
+            return ();
         }
-        else {
-            save_new_pool(begin_cell().store_slice(pool_address).store_ref(all_pools).end_cell(), ds);
+        
+        if (inner_op == op::send_commissions) {
+            throw_unless(exc::out_of_gas, msg_value > gas::jetton_transfer * 3 + gas::update_sharecoms);
+            int jetton_amount  = in_msg_body~load_coins();
+            slice pool_address = in_msg_body~load_msg_addr();
+            
+            cell sharecoms_data = begin_cell()
+                                        .store_slice(pool_address)
+                                        .store_slice(my_address())
+                                  .end_cell();
+            
+            cell sharecoms_state_init = begin_cell()
+                                            .store_uint(0, 2)
+                                            .store_dict(storage::sharecoms_code)
+                                            .store_dict(sharecoms_data)
+                                            .store_uint(0, 1)
+                                        .end_cell();
+
+            slice sharecoms_address = begin_cell()
+                                            .store_uint(4, 3)
+                                            .store_int(workchain(), 8)
+                                            .store_uint(cell_hash(sharecoms_state_init), 256)
+                                       .end_cell().begin_parse();
+            
+            ;; 10% for the team
+            send_jettons(query_id, muldiv(jetton_amount, 1, 10), storage::team_address, sender_address, gas::jetton_transfer, 0, 1, 1, null());
+            ;; 40% for conversion to JVT and burn
+            send_jettons(query_id, muldiv(jetton_amount, 4, 10), storage::conversion_address, sender_address, gas::jetton_transfer, 0, 1, 1, null());  
+            ;; 50% for distribution above JVT stakers 
+            send_jettons(query_id, muldiv(jetton_amount, 5, 10), sharecoms_address, sender_address, 0, 128, 1, gas::update_sharecoms, null());
+
+            return ();
         }
-
-        cell sharecoms_data = begin_cell()
-                        .store_slice(pool_address)
-                        .store_slice(my_address())
-                    .end_cell();
-        
-        cell sharecoms_state_init = begin_cell()
-                                .store_uint(0, 2)
-                                .store_dict(sharecoms_code)
-                                .store_dict(sharecoms_data)
-                                .store_uint(0, 1)
-                            .end_cell();
-
-        slice sharecoms_address = begin_cell()
-                                .store_uint(4, 3)
-                                .store_int(workchain(), 8)
-                                .store_uint(cell_hash(sharecoms_state_init), 256)
-                            .end_cell().begin_parse();
-
-        cell collection_content     = ds~load_ref();
-
-        int last_tvl               = ds~load_coins();
-        int distributed_rewards    = ds~load_uint(256);
-
-        int min_lock_period        = ds~load_uint(32);
-        int farming_speed          = ds~load_coins();
-
-        slice rewards_wallet_address = ds~load_msg_addr();
-        int rewards_balance        = ds~load_coins();
-        int commission_factor      = ds~load_uint(16);
-
-        int wallet_lock_changed    = ds~load_uint(1);
-        int wallet_rewards_changed = ds~load_uint(1);
-        int premint_open           = ds~load_uint(1);
-
-        ds = ds~load_ref().begin_parse();
-        int start_time             = ds~load_uint(32);
-        int end_time               = ds~load_uint(32);
-        int minimum_deposit        = ds~load_coins();
-
-        slice lock_wallet_address    = ds~load_msg_addr();
-        slice admin_address          = ds~load_msg_addr();
-        slice creator_address        = ds~load_msg_addr();
-
-        builder msg = begin_cell()
-                        .store_uint(0x18, 6)
-                        .store_slice(sharecoms_address)
-                        .store_coins(gas_for_deploy)
-                        .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
-                        .store_ref(sharecoms_state_init)
-                        .store_ref(begin_cell()
-                                .store_uint(0, 32)
-                                .store_ref(
-                                    begin_cell()
-                                        .store_slice(stakinig_jvt_address)
-                                        .store_slice(lock_wallet_address)
-                                    .end_cell()
-                                )
-                                .store_ref(
-                                    begin_cell()
-                                    .store_slice(stakinig_jvt_address)
-                                    .store_ref(nft_item_code)
-                                    .end_cell()
-                                )
-                                .store_dict(new_dict())
-                                .sotre_dict(new_dict())
-                            .end_cell());
-
-        send_raw_message(msg.end_cell(), 0);
-        ;; NEED TO CHANGE
-        
-        
-        builder msg = begin_cell()
-                        .store_uint(0x18, 6)
-                        .store_slice(sender_address)
-                        .store_coins(0)
-                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-                        .store_uint(op::excesses, 32)
-                        .store_uint(query_id, 64);
-        send_raw_message(msg.end_cell(), 128);  
-
-        return ();
     }
 
-    if (op == op::transfer_notification) {
-        throw_unless(exc::out_of_gas, msg_value > gas_for_jetton_transfer * 4);
-
-        raw_reserve(0,4);
-
-        int jetton_amount = in_msg_body~load_coins();
-        slice msg_sender = in_msg_body~load_msg_addr();
-
-        int for_burn = mnuldiv(jetton_amount, 2, 5); ;; 4/10
-        send_jettons(query_id, for_burn, burning_addr, sender_address, gas_for_jetton_transfer, 0);
-        
-        cell sharecoms_data = begin_cell()
-                                .store_slice(msg_sender)
-                                .store_slice(my_address())
-                            .end_cell();
-        
-        cell sharecoms_state_init = begin_cell()
-                        .store_uint(0, 2)
-                        .store_dict(sharecoms_code)
-                        .store_dict(sharecoms_data)
-                        .store_uint(0, 1)
-                    .end_cell();
-
-        slice sharecoms_address = begin_cell()
-                                .store_uint(4, 3)
-                                .store_int(workchain(), 8)
-                                .store_uint(cell_hash(sharecoms_state_init), 256)
-                            .end_cell().begin_parse();
-        
-        send_jettons(query_id, jetton_amount / 2, sharecoms_address, sender_address, gas_for_jetton_transfer, 0); ;; 5/10
-
-        send_jettons(query_id,jetton_amount / 10,burning_addr,sender_address,msg_value, 128) ;; 1/10
-
-        return ();
-    }
-
-    if(op == op::excesses) { 
+    if (op == op::excesses) { 
         return();
     } 
-    (slice owner_address, slice burning_addr) = (other_data~load_msg_addr(), other_data~load_msg_addr());
-    throw_unless(exc::incorrect_sender, equal_slices(sender_address, owner_address));
 
-    if (op == 2) {  ;; harvest royalty from staking pool
-        throw_unless(exc::out_of_gas, msg_value > gas_for_jetton_transfer);
-        slice pool_address = in_msg_body~load_msg_addr();
-        builder msg = begin_cell()
-                .store_uint(0x18, 6)
-                .store_slice(pool_address)
-                .store_coins(0)
-                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-                .store_uint(op::withdraw_fees, 32)
-                .store_uint(query_id, 64); 
-        send_raw_message(msg.end_cell(), 64);
-
-        return ();
-    }
+    throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::team_address));
 
     if (op == 3) {  ;; withdraw jetton
-        throw_unless(exc::out_of_gas, msg_value > gas_for_jetton_transfer);
+        throw_unless(exc::out_of_gas, msg_value > gas::jetton_transfer);
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         int jetton_amount = in_msg_body~load_coins();
-        send_jettons(query_id, jetton_amount, owner_address, jetton_wallet_address, gas_for_jetton_transfer, 0);
+        send_jettons(query_id, jetton_amount, storage::team_address, jetton_wallet_address, 0, 64, 1, 1, null());
 
         return ();
     }
 
     if (op == 4) {  ;; withdraw ton
-        int msg_value = (my_balance - min_tons_for_storage);
-        if (msg_value < min_withdrawable_amount) {
-            return ();
-        }
+        raw_reserve(gas::min_tons_for_storage, 0);
+
         builder msg = begin_cell()
                         .store_uint(0x10, 6)
-                        .store_slice(owner_address)
+                        .store_slice(storage::team_address)
                         .store_coins(msg_value)
                         .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
-        send_raw_message(msg.end_cell(), 0); 
+        send_raw_message(msg.end_cell(), 128); 
         
         return ();
     }
@@ -312,37 +249,42 @@ const int tons_for_notification = 5000000;
 
     ;; change something
     if (op == 10) {  ;; change creation fee
-        throw_unless(exc::out_of_gas, msg_value > tons_for_notification);
-        notify_owner(owner_address, tons_for_notification, "Creation fee was changed");
-        save_all_data(staking_pool_code, nft_item_code, all_pools, in_msg_body~load_coins(), owner_address, burning_addr);
+        storage::creation_fee = in_msg_body~load_coins();
+        save_data();
 
+        notify_owner("Creation fee was changed");
         return ();
     }
     if (op == 11) {  ;; change staking_pool_code and nft_item_code
-        throw_unless(exc::out_of_gas, msg_value > tons_for_notification);
-        notify_owner(owner_address, tons_for_notification, "Staking smc code was changed");
-        save_all_data(in_msg_body~load_ref(), in_msg_body~load_ref(), all_pools, creation_fee, owner_address, burning_addr);
+        storage::staking_pool_code = in_msg_body~load_ref();
+        storage::nft_item_code = in_msg_body~load_ref();
+        save_data();
 
+        notify_owner("Staking smc code was changed");
         return ();
     }
-    if (op == 12) {  ;; change owner_address
-        save_all_data(staking_pool_code, nft_item_code, all_pools, creation_fee, in_msg_body~load_msg_addr(), burning_addr);
+    if (op == 12) {  ;; change team_address
+        storage::team_address = in_msg_body~load_msg_addr();
+        save_data();
 
+        notify_owner("Team address was changed");
         return ();
     }
     if (op == 13) {  ;; change burning_addr
-        save_all_data(staking_pool_code, nft_item_code, all_pools, creation_fee, owner_address, in_msg_body~load_msg_addr());
+        storage::conversion_address = in_msg_body~load_msg_addr();
+        save_data();
 
+        notify_owner("Conversion address was changed");
         return ();
     }
-    if (op == 0xfffe) {
+    if (op == 0xfffe) {  ;; set data
         set_data(in_msg_body~load_ref());
-
+        notify_owner("Pool admin data was changed");
         return ();
     }
-    if (op == 0xffff) {
+    if (op == 0xffff) {  ;; set code
+        notify_owner("Pool admin code was changed");
         set_code(in_msg_body~load_ref());
-
         return ();
     }
 

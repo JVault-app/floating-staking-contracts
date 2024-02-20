@@ -18,7 +18,7 @@ slice calculate_nft_item_address(cell nft_item_code, cell state_init) inline {
             .begin_parse();
 }
 
-slice calculate_address_by_index(slice collection_address, cell nft_item_code, int item_index) inline {
+slice calculate_nft_address_by_index(slice collection_address, cell nft_item_code, int item_index) inline {
     return begin_cell()
                 .store_uint(4, 3)
                 .store_int(0, 8)  ;; workchain();
@@ -43,7 +43,7 @@ slice calculate_address_by_index(slice collection_address, cell nft_item_code, i
 
 
 () send_jettons(int query_id, int jetton_amount, slice to_address, slice jetton_wallet_address, 
-                int msg_value, int sending_mode, int need_response) impure inline {
+                int msg_value, int sending_mode, int need_response, int forward_ton_amount, slice forward_payload) impure inline {
 
     builder msg_body = begin_cell()
                         .store_uint(op::transfer_jetton, 32)
@@ -57,8 +57,33 @@ slice calculate_address_by_index(slice collection_address, cell nft_item_code, i
         msg_body = msg_body.store_uint(0, 2);
     }
     msg_body = msg_body.store_uint(0, 1)
-                        .store_coins(1)
-                        .store_uint(0, 1);
+                        .store_coins(forward_ton_amount);
+    if (null?(forward_payload)) {
+        msg_body = msg_body.store_uint(0, 1);
+    }
+    else {
+        msg_body = msg_body.store_slice(forward_payload);
+    }          
+
+    builder msg = begin_cell()
+                .store_uint(0x10, 6) 
+                .store_slice(jetton_wallet_address)
+                .store_coins(msg_value)
+                .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
+                .store_uint(1, 1)
+                .store_ref(msg_body.end_cell());
+            
+    send_raw_message(msg.end_cell(), sending_mode);  
+}
+
+
+() burn_jettons(int query_id, int jetton_amount, slice jetton_wallet_address,
+                slice response_address, int msg_value, int sending_mode) {
+    builder msg_body = begin_cell()
+                        .store_uint(op::burn_jetton, 32)
+                        .store_uint(query_id, 64)
+                        .store_coins(jetton_amount)
+                        .store_slice(response_address);
 
     builder msg = begin_cell()
                 .store_uint(0x10, 6) 
