@@ -215,7 +215,7 @@ slice calculate_address_by_index(slice jvt_staking_address, cell nft_item_code, 
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
-    if (op == op::withdraw_jetton) {
+    if (op == op::report_storage_data) {
         throw_unless(111, msg_value >= gas::jetton_transfer); ;; gas for transaction
 
         throw_unless(432, storage::last_commission_time); ;; if we havn't commissions
@@ -232,9 +232,6 @@ slice calculate_address_by_index(slice jvt_staking_address, cell nft_item_code, 
         int is_transferrable     = ds~load_uint(1);
         int withdrawal_allowed   = ds~load_uint(1);
         int is_active            = ds~load_uint(1);
-
-        slice ds3 = ds~load_ref().begin_parse();
-        int distributed_rewards = ds3~load_uint(256);
 
         throw_unless(111, locked_value);
         throw_unless(222, equal_slices(sedner_address, calculate_address_by_index(storage::jvt_staking_address, storage::nft_item_code, collection_index))); 
