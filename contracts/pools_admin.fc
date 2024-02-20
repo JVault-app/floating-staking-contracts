@@ -21,7 +21,7 @@ const int tons_for_notification = 5000000;
 ;; }
 
 
-() save_all_data(slice stakinig_jvt_address, cell staking_pool_code, cell nft_item_code,  cell all_pools, 
+() save_all_data(slice stakinig_jvt_address, cell sharecoms_code, cell staking_pool_code, cell nft_item_code,  cell all_pools, 
              int creation_fee, slice owner_address_1, slice owner_address_2) impure {
 
     set_data(begin_cell()
