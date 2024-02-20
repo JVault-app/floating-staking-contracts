@@ -3,6 +3,7 @@ import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, 
 export type PoolsAdminConfig = {
     stakingPoolCode: Cell;
     nftItemCode: Cell;
+    sharecomsCode: Cell;
     creationFee: bigint;
     ownerAddress1: Address;
     ownerAddress2: Address;
@@ -13,6 +14,7 @@ export function poolsAdminConfigToCell(config: PoolsAdminConfig): Cell {
                 .storeRef(beginCell().endCell())
                 .storeRef(config.stakingPoolCode)
                 .storeRef(config.nftItemCode)
+                .storeRef(config.sharecomsCode)
                 .storeCoins(config.creationFee)
                 .storeAddress(config.ownerAddress1)  // main owner
                 .storeAddress(config.ownerAddress2)  // address for distribution part of income to JVT holders
