@@ -43,7 +43,7 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
 
 
 () send_jettons(int query_id, int jetton_amount, slice to_address, slice jetton_wallet_address, 
-                int msg_value, int sending_mode, int need_response, int forward_ton_amount, slice forward_payload) impure inline {
+                int msg_value, int sending_mode, int need_response, int forward_ton_amount, cell forward_payload) impure inline {
 
     builder msg_body = begin_cell()
                         .store_uint(op::transfer_jetton, 32)
@@ -62,7 +62,7 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
         msg_body = msg_body.store_uint(0, 1);
     }
     else {
-        msg_body = msg_body.store_slice(forward_payload);
+        msg_body = msg_body.store_ref(forward_payload);
     }          
 
     builder msg = begin_cell()

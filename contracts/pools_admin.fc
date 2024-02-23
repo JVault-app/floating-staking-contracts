@@ -160,6 +160,8 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 
         int   jetton_amount = in_msg_body~load_coins();
         slice from_address  = in_msg_body~load_msg_addr();
+
+        in_msg_body = in_msg_body~load_ref().begin_parse();
         int   inner_op      = in_msg_body~load_uint(32);
 
         if (inner_op == op::deploy_new_pool) {
@@ -270,7 +272,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         notify_owner("Team address was changed");
         return ();
     }
-    if (op == 13) {  ;; change burning_addr
+    if (op == 13) {  ;; change conversion_address
         storage::conversion_address = in_msg_body~load_msg_addr();
         save_data();
 

@@ -196,7 +196,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
             }
             storage::end_time = new_end_time;
 
-            send_jettons(query_id, commission, storage::admin_address, storage::rewards_wallet_address, 0, 64, 0, gas::jetton_transfer * 3 + gas::update_sharecoms, null());
+            send_jettons(query_id, commission, storage::admin_address, storage::rewards_wallet_address, 0, 64, 0, gas::jetton_transfer * 3 + gas::update_sharecoms, begin_cell().store_uint(op::send_commissions, 32).end_cell());
         }
         else {  ;; stake jettons
             throw_if(exc::out_of_gas, msg_value < gas::stake);
