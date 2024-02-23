@@ -20,7 +20,8 @@ const int exc::unsupported_op = 0xffff;
 
 {- GAS -}
 
-const int gas::deploy_pool           = 110000000;  ;; 0.11  TON
+const int gas::compute               = 100000000;  ;; 0.10  TON
+const int gas::deploy_pool           = 120000000;  ;; 0.11  TON
 const int gas::deploy_sharecoms      = 100000000;  ;; 0.10  TON
 const int gas::notification          = 10000000;   ;; 0.01  TON
 const int gas::provide_addr          = 20000000;   ;; 0.02  TON
@@ -33,6 +34,7 @@ const int gas::withdraw_nft          = 300000000;  ;; 0.30  TON
 const int gas::min_tons_for_storage  = 50000000;   ;; 0.05  TON
 const int gas::update_sharecoms      = 50000000;   ;; 0.05  TON
 
+const int gas::receive_commissions   = gas::update_sharecoms + gas::jetton_transfer * 3 + 10000000;
 const int gas::send_commissions      = gas::update_sharecoms + gas::jetton_transfer * 4;
 
 

@@ -5,8 +5,8 @@
 global int storage::init?;
 
 global slice storage::jetton_wallet_address;
-global cell  storage::users_dict; ;; sedner_address : last_ptr ( when sedner_address claim reward in last time )
 
+global cell  storage::users_dict; ;; sedner_address : last_ptr ( when sedner_address claim reward in last time )
 global cell  storage::commission_dict; ;; time : sum, first element is 0: (0, 0)
 global int   storage::last_commission_time; 
 
@@ -22,8 +22,9 @@ global slice storage::pool_admin_address;
     slice ds = get_data().begin_parse();
     storage::pool_address           = ds~load_msg_addr();
     storage::pool_admin_address     = ds~load_msg_addr();
+    storage::init? = 0;
 
-    if(ds.slice_bits() > 0 ) { 
+    if(ds.slice_bits() > 0) { 
         storage::init? = 1;
         storage::last_commission_time   = ds~load_uint(32);
         
@@ -44,7 +45,6 @@ global slice storage::pool_admin_address;
         begin_cell()
             .store_slice(storage::pool_address)
             .store_slice(storage::pool_admin_address)
-            .store_uint(storage::init?, 1)
             .store_uint(storage::last_commission_time, 32)
             .store_ref(
                 begin_cell()
@@ -52,11 +52,7 @@ global slice storage::pool_admin_address;
                     .store_slice(storage::jetton_wallet_address)
                 .end_cell()
             )
-            .store_ref(
-                begin_cell()           
-                    .store_ref(storage::nft_item_code)
-                .end_cell()
-            )
+            .store_ref(storage::nft_item_code)
             .store_dict(storage::users_dict)
             .store_dict(storage::commission_dict)
         .end_cell()
@@ -135,11 +131,10 @@ global slice storage::pool_admin_address;
     if (storage::init? == 0) {
         throw_unless(405, equal_slices(sedner_address, storage::pool_admin_address));
         
-        slice ds = in_msg_body~load_ref().begin_parse();
         storage::last_commission_time   = 0;
-        storage::jvt_staking_address    = ds~load_msg_addr();
-        storage::jetton_wallet_address  = ds~load_msg_addr();
-        storage::nft_item_code          = ds~load_ref();
+        storage::jvt_staking_address    = in_msg_body~load_msg_addr();
+        storage::jetton_wallet_address  = in_msg_body~load_msg_addr();
+        storage::nft_item_code          = in_msg_body~load_ref();
         storage::users_dict             = new_dict();
         storage::commission_dict        = new_dict();
 
@@ -224,12 +219,18 @@ global slice storage::pool_admin_address;
         int transferred_jettons = in_msg_body~load_coins();
         builder msg = begin_cell()
                         .store_uint(0x18, 6)
-                        .store_slice(storage::pool_address)
+                        .store_slice(storage::jvt_staking_address)
                         .store_coins(0)
                         .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                         .store_uint(op::get_storage_data, 32)
                         .store_uint(query_id, 64)
-                        .store_coins(transferred_jettons);
+                        .store_slice(my_address())
+                        .store_ref(
+                            begin_cell()
+                                .store_uint(op::update_sharecoms, 32)
+                                .store_coins(transferred_jettons)
+                            .end_cell()
+                        );
         send_raw_message(msg.end_cell(), 64);
     
         return();
@@ -243,27 +244,22 @@ global slice storage::pool_admin_address;
         return ();
     }
 
+    if (op == 15) {
+        storage::jvt_staking_address = in_msg_body~load_msg_addr();
+        save_data();
+        return ();
+    }
+
     ;; opportunity to change code & data before audit (will be removed in the future)
 
-    if (op == 0xfffe) { 
-        set_data(in_msg_body~load_ref());
-        return ();
-    }
-    if (op == 0xffff) { 
-        set_code(in_msg_body~load_ref());
-        return ();
-    }
-
-    if(op == 1) {
-          cell msg = begin_cell()
-            .store_uint(0x18, 6)
-            .store_slice(sedner_address)
-            .store_coins(0)
-            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-        .end_cell();
-        send_raw_message(msg,128);
-        return();
-    }
+    ;; if (op == 0xfffe) { 
+    ;;     set_data(in_msg_body~load_ref());
+    ;;     return ();
+    ;; }
+    ;; if (op == 0xffff) { 
+    ;;     set_code(in_msg_body~load_ref());
+    ;;     return ();
+    ;; }
 
     throw(0xffff);
 }
@@ -282,9 +278,8 @@ int last_sum() method_id {
     return curr_sum;
 }
 
-int get_last_user_claiming(int user_id) method_id {
+int get_last_claim_time(int user_id) method_id {
     load_data();
-    
     (slice dict_value, int success) = storage::users_dict.udict_get?(256, user_id);
 
     ifnot (success) {
@@ -301,7 +296,7 @@ int get_rewards_by_time(int time, int amount_in_stake) method_id {
 
     (slice commision_dict_value, _) = storage::commission_dict.udict_get?(32, storage::last_commission_time);
 
-    int last_sum  = commision_dict_value~load_uint(256); ;; last sum wich sedner_address didnt claim
+    int last_sum  = commision_dict_value~load_uint(256); ;; last sum wich sedner_address didn't claim
     
     (commision_dict_value, _) = storage::commission_dict.udict_get?(32, storage::last_commission_time);
 
@@ -310,17 +305,13 @@ int get_rewards_by_time(int time, int amount_in_stake) method_id {
     return muldiv(curr_sum - last_sum, amount_in_stake, sharecoms_devider);
 }
 
-int get_last_commission_time() method_id {
+(slice, cell, cell, int, slice, cell, slice, slice, slice) get_storage_data() method_id {
     load_data();
-    return storage::last_commission_time;
+    return (storage::jetton_wallet_address, storage::users_dict, storage::commission_dict, 
+            storage::last_commission_time, storage::jvt_staking_address, storage::nft_item_code,
+            storage::jvt_staking_address, storage::pool_address, storage::pool_admin_address);
 }
 
-cell get_nft_item_code() method_id {
-    load_data();
-    return storage::nft_item_code;
-}
-
-slice get_collection_adress() method_id {
-    load_data();
-    return storage::jvt_staking_address;
+cell raw_get_data() method_id {
+    return (get_data());
 }

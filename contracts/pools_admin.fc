@@ -163,7 +163,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 
         in_msg_body = in_msg_body~load_ref().begin_parse();
         int   inner_op      = in_msg_body~load_uint(32);
-
+        
         if (inner_op == op::deploy_new_pool) {
             throw_unless(exc::out_of_gas, msg_value > gas::deploy_pool + gas::deploy_sharecoms + gas::burn_jetton);
             throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::jvt_wallet_address));
@@ -184,11 +184,9 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         
         if (inner_op == op::send_commissions) {
             throw_unless(exc::out_of_gas, msg_value > gas::jetton_transfer * 3 + gas::update_sharecoms);
-            int jetton_amount  = in_msg_body~load_coins();
-            slice pool_address = in_msg_body~load_msg_addr();
             
             cell sharecoms_data = begin_cell()
-                                        .store_slice(pool_address)
+                                        .store_slice(from_address)
                                         .store_slice(my_address())
                                   .end_cell();
             
@@ -206,9 +204,9 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                                        .end_cell().begin_parse();
             
             ;; 10% for the team
-            send_jettons(query_id, muldiv(jetton_amount, 1, 10), storage::team_address, sender_address, gas::jetton_transfer, 0, 1, 1, null());
+            send_jettons(query_id, muldiv(jetton_amount, 1, 10), storage::team_address, sender_address, gas::jetton_transfer, 0, 0, 1, null());
             ;; 40% for conversion to JVT and burn
-            send_jettons(query_id, muldiv(jetton_amount, 4, 10), storage::conversion_address, sender_address, gas::jetton_transfer, 0, 1, 1, null());  
+            send_jettons(query_id, muldiv(jetton_amount, 4, 10), storage::conversion_address, sender_address, gas::jetton_transfer, 0, 0, 1, null());  
             ;; 50% for distribution above JVT stakers 
             send_jettons(query_id, muldiv(jetton_amount, 5, 10), sharecoms_address, sender_address, 0, 128, 1, gas::update_sharecoms, null());
 
@@ -257,12 +255,13 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         notify_owner("Creation fee was changed");
         return ();
     }
-    if (op == 11) {  ;; change staking_pool_code and nft_item_code
+    if (op == 11) {  ;; change staking_pool_code, nft_item_code and sharecoms code
         storage::staking_pool_code = in_msg_body~load_ref();
         storage::nft_item_code = in_msg_body~load_ref();
+        storage::sharecoms_code = in_msg_body~load_ref();
         save_data();
 
-        notify_owner("Staking smc code was changed");
+        notify_owner("Smc code was changed");
         return ();
     }
     if (op == 12) {  ;; change team_address
@@ -277,6 +276,20 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         save_data();
 
         notify_owner("Conversion address was changed");
+        return ();
+    }
+    if (op == 14) {
+        storage::jvt_wallet_address = in_msg_body~load_msg_addr();
+        save_data();
+
+        notify_owner("JVT wallet address was changed");
+        return ();
+    }
+    if (op == 15) {
+        storage::jvt_staking_address = in_msg_body~load_msg_addr();
+        save_data();
+
+        notify_owner("JVT staking pool address was changed");
         return ();
     }
     if (op == 0xfffe) {  ;; set data
@@ -297,18 +310,17 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 ;; GET methods
 
 int get_creation_fee() method_id {
-    slice ds = get_data().begin_parse();
-    return ds~load_coins();
+    load_data();
+    return storage::creation_fee;
 }
 
 
 (slice, slice) get_owners() method_id {
-    slice ds = get_data().begin_parse();
-    ds~load_coins();
-    return (ds~load_msg_addr(), ds~load_msg_addr());
+    load_data();
+    return (storage::team_address, storage::conversion_address);
 }
 
-cell get_pools() method_id {
-    slice ds = get_data().begin_parse();
-    return ds~load_ref();
+
+(cell) raw_get_data() method_id {
+    return get_data();
 }

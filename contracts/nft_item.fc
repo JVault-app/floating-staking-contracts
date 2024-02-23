@@ -118,11 +118,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         return ();
     }
 
-    cs~load_msg_addr();  ;; skip dst
-    cs~load_coins();  ;; skip value
-    cs~skip_bits(1);  ;; skip extracurrency collection
-    cs~load_coins();  ;; skip ihr_fee
-    int fwd_fee = muldiv(cs~load_coins(), 3, 1);  ;; we use message fwd_fee for estimation of forward_payload costs
+    int fwd_fee = get_forward_fee(cs);
 
     if (storage::init? == 0) {
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
@@ -219,20 +215,31 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     }
 
     if (op == op::get_storage_data) {
-        slice to_address = in_msg_body~load_msg_addr();
+        int cnt = in_msg_body~load_uint(8);
+        cell forward_payload = in_msg_body~load_ref();
 
-        var msg = begin_cell()
-                    .store_uint(0x10, 6)
-                    .store_slice(to_address)
-                    .store_coins(0)
-                    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-                    .store_uint(op::report_storage_data, 32)
-                    .store_uint(query_id, 64)
-                    .store_uint(now(), 32)
-                    .store_ref(get_data())
-                    .store_slice(in_msg_body);
+        cell recipients_dict = in_msg_body~load_dict();
 
-        send_raw_message(msg.end_cell(), 64);
+        throw_unless(msg_value > cnt * (gas::jetton_transfer + gas::jetton_transfer) + gas::compute, exc::out_of_gas);
+        (int key, slice to_address, int success) = recipients_dict.udict_get_min?(8);
+        
+        repeat(cnt) {
+            var msg = begin_cell()
+                        .store_uint(0x10, 6)
+                        .store_slice(to_address)
+                        .store_coins(gas::jetton_transfer + gas::jetton_transfer)
+                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                        .store_uint(op::report_storage_data, 32)
+                        .store_uint(query_id, 64)
+                        .store_uint(now(), 32)
+                        .store_ref(get_data())
+                        .store_ref(forward_payload);
+
+            send_raw_message(msg.end_cell(), 0);
+            (key, to_address, success) = recipients_dict.udict_get_next?(8, key);
+            throw_unless(success, exc::incorrect_input);
+        }
+
         return ();
     }
     

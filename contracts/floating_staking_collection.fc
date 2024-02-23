@@ -110,6 +110,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         return ();
     }
     slice sender_address = cs~load_msg_addr();
+    ;; int fwd_fee = get_forward_fee(cs);
 
     load_data();
 
@@ -196,7 +197,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
             }
             storage::end_time = new_end_time;
 
-            send_jettons(query_id, commission, storage::admin_address, storage::rewards_wallet_address, 0, 64, 0, gas::jetton_transfer * 3 + gas::update_sharecoms, begin_cell().store_uint(op::send_commissions, 32).end_cell());
+            send_jettons(query_id, commission, storage::admin_address, storage::rewards_wallet_address, 0, 64, 0, gas::receive_commissions, begin_cell().store_uint(op::send_commissions, 32).end_cell());
         }
         else {  ;; stake jettons
             throw_if(exc::out_of_gas, msg_value < gas::stake);
@@ -398,19 +399,17 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         return ();
     }
 
-
     ;; opportunity to change code & data before audit (will be removed in the future)
-    if (op == 0xfffe) { 
-        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
-        set_data(in_msg_body~load_ref());
-        return ();
-    }
-    if (op == 0xffff) { 
-        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
-        set_code(in_msg_body~load_ref());
-        return ();
-    }
-    
+    ;; if (op == 0xfffe) { 
+    ;;     ;; throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
+    ;;     set_data(in_msg_body~load_ref());
+    ;;     return ();
+    ;; }
+    ;; if (op == 0xffff) { 
+    ;;     ;; throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
+    ;;     set_code(in_msg_body~load_ref());
+    ;;     return ();
+    ;; }
 
     throw(exc::unsupported_op);
 }
@@ -466,17 +465,14 @@ cell get_nft_content(int index, cell individual_content) method_id {
             storage::rewards_wallet_address, storage::last_tvl, storage::distributed_rewards, storage::last_update_time);
 }
 
-
 (int) get_premint_status() method_id {
     load_data();
     return storage::premint_open;
 }
 
-
 (cell) raw_get_data() method_id {
     return get_data();
 }
-
 
 (int) get_version() method_id {
     return 5;

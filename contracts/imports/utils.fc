@@ -57,12 +57,11 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
         msg_body = msg_body.store_uint(0, 2);
     }
     msg_body = msg_body.store_uint(0, 1)
-                        .store_coins(forward_ton_amount);
-    if (null?(forward_payload)) {
-        msg_body = msg_body.store_uint(0, 1);
-    }
-    else {
-        msg_body = msg_body.store_ref(forward_payload);
+                        .store_coins(forward_ton_amount)
+                        .store_uint(1, 1);
+
+    ifnot(null?(forward_payload)) {
+        msg_body = msg_body.store_dict(forward_payload);
     }          
 
     builder msg = begin_cell()
@@ -78,7 +77,7 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
 
 
 () burn_jettons(int query_id, int jetton_amount, slice jetton_wallet_address,
-                slice response_address, int msg_value, int sending_mode) {
+                slice response_address, int msg_value, int sending_mode) impure inline {
     builder msg_body = begin_cell()
                         .store_uint(op::burn_jetton, 32)
                         .store_uint(query_id, 64)
@@ -136,4 +135,13 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
     }
 
     send_raw_message(msg.end_cell(), send_mode);
+}
+
+
+int get_forward_fee(slice cs) inline {
+    cs~load_msg_addr();  ;; skip dst
+    cs~load_coins();  ;; skip value
+    cs~skip_bits(1);  ;; skip extracurrency collection
+    cs~load_coins();  ;; skip ihr_fee
+    return muldiv(cs~load_coins(), 3, 2);  ;; we use message fwd_fee for estimation of forward_payload costs
 }
