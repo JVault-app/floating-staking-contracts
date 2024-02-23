@@ -314,13 +314,15 @@ int get_creation_fee() method_id {
     return storage::creation_fee;
 }
 
-
 (slice, slice) get_owners() method_id {
     load_data();
     return (storage::team_address, storage::conversion_address);
 }
 
-
 (cell) raw_get_data() method_id {
     return get_data();
+}
+
+int get_version() method_id {
+    return 5;
 }
