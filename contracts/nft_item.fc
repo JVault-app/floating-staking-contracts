@@ -215,25 +215,32 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     }
 
     if (op == op::get_storage_data) {
-        int cnt = in_msg_body~load_uint(8);
+        int recipients_cnt = in_msg_body~load_uint(8);  ;; number of recipients
+        throw_unless(exc::int_out_of_range, recipients_cnt <= 128);  ;; can send only 128 messages due to gas limits
+
+        int computing_fees = recipients_cnt * 5400000 + 10000000;  ;; estimate gas consumed during the compute phase
+        int tons_for_one_msg = (msg_value - computing_fees) / recipients_cnt; 
+        throw_unless(exc::out_of_gas, tons_for_one_msg > gas::notification * 2); 
+
         cell forward_payload = in_msg_body~load_ref();
-
         cell recipients_dict = in_msg_body~load_dict();
-
-        throw_unless(msg_value > cnt * (gas::jetton_transfer + gas::jetton_transfer) + gas::compute, exc::out_of_gas);
-        (int key, slice to_address, int success) = recipients_dict.udict_get_min?(8);
         
-        repeat(cnt) {
+        builder common = begin_cell()
+                            .store_coins(tons_for_one_msg)
+                            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                            .store_uint(op::report_storage_data, 32)
+                            .store_uint(query_id, 64)
+                            .store_slice(sender_address)
+                            .store_uint(now(), 32)
+                            .store_ref(get_data())
+                            .store_ref(forward_payload);  ;; common part of all messages
+                            
+        (int key, slice to_address, int success) = recipients_dict.udict_get_min?(8);
+        repeat(recipients_cnt) {
             var msg = begin_cell()
                         .store_uint(0x10, 6)
                         .store_slice(to_address)
-                        .store_coins(gas::jetton_transfer + gas::jetton_transfer)
-                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
-                        .store_uint(op::report_storage_data, 32)
-                        .store_uint(query_id, 64)
-                        .store_uint(now(), 32)
-                        .store_ref(get_data())
-                        .store_ref(forward_payload);
+                        .store_builder(common);
 
             send_raw_message(msg.end_cell(), 0);
             (key, to_address, success) = recipients_dict.udict_get_next?(8, key);

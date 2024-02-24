@@ -15,12 +15,12 @@ const int exc::transfer_not_allowed = 51;
 const int exc::premint_closed = 52;
 const int exc::already_withdrawed = 53;
 const int exc::nothing_to_claim = 54;
+const int exc::int_out_of_range = 55;
 const int exc::unsupported_op = 0xffff;
 
 
 {- GAS -}
 
-const int gas::compute               = 100000000;  ;; 0.10  TON
 const int gas::deploy_pool           = 120000000;  ;; 0.11  TON
 const int gas::deploy_sharecoms      = 100000000;  ;; 0.10  TON
 const int gas::notification          = 10000000;   ;; 0.01  TON
