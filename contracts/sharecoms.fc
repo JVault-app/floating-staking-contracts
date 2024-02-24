@@ -4,17 +4,17 @@
 
 global int storage::init?;
 
-global slice storage::jetton_wallet_address;
+global slice storage::pool_address;           ;; Address of the pool from which commissions arrives. (MsgAddress)
+global slice storage::pool_admin_address;     ;; Address of the pools admin that deployed this contract. (MsgAddress) 
 
-global cell  storage::nfts_dict;             ;; key = nft address (uint256); value = last claimed commission arrival time (uint32). (HashMapE)
-global cell  storage::commissions_dict;      ;; key = commission arrival time (uint32); value = amount of claimable commissions per `sharecoms_devider` staked JVT (uint256). First element is (0: 0). (HashMapE)
-global int   storage::last_commission_time;  ;; last commission artival time (max key in the commissions dict). (uint32)
+global int   storage::last_commission_time;   ;; Last commission artival time (max key in the commissions dict). (uint32)
 
-global slice storage::jvt_staking_address;   ;; Address of the current JVT staking pool. (MsgAddress)
-global cell  storage::nft_item_code;         ;; Code of JVT Bond NFTs. (Cell)
+global slice storage::jvt_staking_address;    ;; Address of the current JVT staking pool. (MsgAddress)
+global slice storage::jetton_wallet_address;  ;; Address of the jetton wallet in which commissions are stored. (MsgAddress)
 
-global slice storage::pool_address;          ;; Address of the pool from which commissions arrives. (MsgAddress)
-global slice storage::pool_admin_address;    ;; Address of the pools admin that deployed this contract. (MsgAddress) 
+global cell  storage::nft_item_code;          ;; Code of JVT Bond NFTs. (Cell)
+global cell  storage::nfts_dict;              ;; Key = nft address (uint256); value = last claimed commission arrival time (uint32). (HashMapE)
+global cell  storage::commissions_dict;       ;; Key = commission arrival time (uint32); value = amount of claimable commissions per `sharecoms_devider` staked JVT (uint256). First element is (0: 0). (HashMapE)
 
 
 () load_data() impure inline {
@@ -156,7 +156,7 @@ global slice storage::pool_admin_address;    ;; Address of the pools admin that 
             cell jvt_collection_content = report_data~load_ref();
             int  jvt_last_tvl           = report_data~load_coins();
             ;; load last commissions amount
-            int commissions_amount     = payload~load_coins();
+            int commissions_amount      = payload~load_coins();
 
             add_commission(report_time, commissions_amount, jvt_last_tvl);
 
