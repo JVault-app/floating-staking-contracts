@@ -6,16 +6,15 @@ global int storage::init?;
 
 global slice storage::jetton_wallet_address;
 
-global cell  storage::users_dict; ;; sedner_address : last_ptr ( when sedner_address claim reward in last time )
-global cell  storage::commission_dict; ;; time : sum, first element is 0: (0, 0)
-global int   storage::last_commission_time; 
+global cell  storage::nfts_dict;             ;; key = nft address (uint256); value = last claimed commission arrival time (uint32). (HashMapE)
+global cell  storage::commissions_dict;      ;; key = commission arrival time (uint32); value = amount of claimable commissions per `sharecoms_devider` staked JVT (uint256). First element is (0: 0). (HashMapE)
+global int   storage::last_commission_time;  ;; last commission artival time (max key in the commissions dict). (uint32)
 
-global slice storage::jvt_staking_address;
-global cell  storage::nft_item_code; 
+global slice storage::jvt_staking_address;   ;; Address of the current JVT staking pool. (MsgAddress)
+global cell  storage::nft_item_code;         ;; Code of JVT Bond NFTs. (Cell)
 
-global slice storage::jvt_staking_address;
-global slice storage::pool_address;
-global slice storage::pool_admin_address;
+global slice storage::pool_address;          ;; Address of the pool from which commissions arrives. (MsgAddress)
+global slice storage::pool_admin_address;    ;; Address of the pools admin that deployed this contract. (MsgAddress) 
 
 
 () load_data() impure inline {
@@ -34,8 +33,8 @@ global slice storage::pool_admin_address;
 
         storage::nft_item_code          = ds~load_ref();
 
-        storage::users_dict             = ds~load_dict();
-        storage::commission_dict        = ds~load_dict();
+        storage::nfts_dict             = ds~load_dict();
+        storage::commissions_dict        = ds~load_dict();
     } 
 }
 
@@ -53,62 +52,47 @@ global slice storage::pool_admin_address;
                 .end_cell()
             )
             .store_ref(storage::nft_item_code)
-            .store_dict(storage::users_dict)
-            .store_dict(storage::commission_dict)
+            .store_dict(storage::nfts_dict)
+            .store_dict(storage::commissions_dict)
         .end_cell()
     );
 }
 
 
-() claim_balance(slice sedner_address, slice owner_address, int query_id, int time_nft, int amount_in_stake) impure inline {
-
-    (int wc, int user_id) = parse_std_addr(sedner_address);
+() claim_commissions(slice nft_address, slice nft_owner_address, int query_id, int time_nft, int staked_jvt) impure inline {
+    (int wc, int user_id) = parse_std_addr(nft_address);
     throw_unless(333, wc == 0);
 
-    (slice dict_value, int success) = storage::users_dict.udict_get?(256, user_id);
-
-    int last_ptr = 0;
+    (slice nfts_dict_value, int success) = storage::nfts_dict.udict_get?(256, user_id);
+    int last_claimed_commission_time = 0;
     if (success){
-        last_ptr = dict_value~load_uint(32);
+        last_claimed_commission_time = nfts_dict_value~load_uint(32);
     }
     else { 
-        (last_ptr, _, _) = storage::commission_dict.udict_get_preveq?(32, time_nft);
-        storage::users_dict~udict_set(256, user_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
+        (last_claimed_commission_time, _, _) = storage::commissions_dict.udict_get_prev?(32, time_nft);
     }
+    throw_unless(exc::nothing_to_claim, last_claimed_commission_time < storage::last_commission_time);
 
-    (slice commision_dict_value, _) = storage::commission_dict.udict_get?(32, last_ptr);
-
-    int last_sum  = commision_dict_value~load_uint(256); ;; last sum wich sedner_address didnt claim
+    (slice commision_dict_value, _) = storage::commissions_dict.udict_get?(32, last_claimed_commission_time);
+    int claimed_commissions  = commision_dict_value~load_uint(256); 
     
-    (commision_dict_value, _) = storage::commission_dict.udict_get?(32, storage::last_commission_time);
+    (commision_dict_value, _) = storage::commissions_dict.udict_get?(32, storage::last_commission_time);
+    int total_commissions  = commision_dict_value~load_uint(256);
 
-    int curr_sum  = commision_dict_value~load_uint(256); ;; current sum
+    int nft_share = muldiv(total_commissions - claimed_commissions, staked_jvt, sharecoms_devider);
+    send_jettons(query_id, nft_share, nft_owner_address, storage::jetton_wallet_address, 0, 64, 1, 1, null());
 
-    int jetton_amount = muldiv(curr_sum - last_sum, amount_in_stake, sharecoms_devider);
-
-    throw_unless(102, jetton_amount);
-
-    send_jettons(query_id, jetton_amount, owner_address, storage::jetton_wallet_address, 0, 64, 1, 1, null());
-
-    storage::users_dict~udict_set(256, user_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
+    storage::nfts_dict~udict_set(256, user_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
     save_data();
-    
     return ();
 }
 
-() add_commission(int time, int add, int total_in_stake) impure inline {
-    ifnot(storage::last_commission_time){
-        storage::commission_dict~udict_set(32, storage::last_commission_time, begin_cell().store_uint(0, 256).end_cell().begin_parse());
-
-    }
-    (slice commision_dict_value, _) = storage::commission_dict.udict_get?(32, storage::last_commission_time);
-
-    int curr_sum  = commision_dict_value~load_uint(256);
-
-    curr_sum += muldiv(sharecoms_devider, add, total_in_stake);
-
-    storage::last_commission_time = time;
-    storage::commission_dict~udict_set(32, time, begin_cell().store_uint(curr_sum, 256).end_cell().begin_parse());
+() add_commission(int commission_arrival_time, int commission_amount, int jvt_pool_tvl) impure inline {
+    (slice commision_dict_value, _) = storage::commissions_dict.udict_get?(32, storage::last_commission_time);
+    int total_commissions  = commision_dict_value~load_uint(256);
+    total_commissions += muldiv(sharecoms_devider, commission_amount, jvt_pool_tvl);
+    storage::commissions_dict~udict_set(32, commission_arrival_time, begin_cell().store_uint(total_commissions, 256).end_cell().begin_parse());
+    storage::last_commission_time = commission_arrival_time;
 
     save_data();
     return ();
@@ -135,8 +119,9 @@ global slice storage::pool_admin_address;
         storage::jvt_staking_address    = in_msg_body~load_msg_addr();
         storage::jetton_wallet_address  = in_msg_body~load_msg_addr();
         storage::nft_item_code          = in_msg_body~load_ref();
-        storage::users_dict             = new_dict();
-        storage::commission_dict        = new_dict();
+        storage::nfts_dict              = new_dict();
+        storage::commissions_dict       = new_dict();
+        storage::commissions_dict~udict_set(32, 0, begin_cell().store_uint(0, 256).end_cell().begin_parse());
 
         builder get_wallet_msg = begin_cell()
                                     .store_uint(0x18, 6)
@@ -207,7 +192,7 @@ global slice storage::pool_admin_address;
             slice expected_nft_address = calculate_nft_address_by_index(storage::jvt_staking_address, storage::nft_item_code, nft_collection_index);
             throw_unless(exc::incorrect_sender, equal_slices(sedner_address, expected_nft_address)); 
             
-            claim_balance(sedner_address, nft_owner_address, query_id, nft_start_time, nft_locked_value);
+            claim_commissions(sedner_address, nft_owner_address, query_id, nft_start_time, nft_locked_value);
 
             return();
         }
@@ -270,44 +255,33 @@ slice get_jetton_wallet_adress() method_id {
     return storage::jetton_wallet_address;
 }
 
-int last_sum() method_id {
+int get_commissions_per_devider() method_id {
     load_data();
-    (slice commision_dict_value, _) = storage::commission_dict.udict_get?(32, storage::last_commission_time);
-
-    int curr_sum  = commision_dict_value~load_uint(256);
-    return curr_sum;
+    (slice commision_dict_value, _) = storage::commissions_dict.udict_get?(32, storage::last_commission_time);
+    return commision_dict_value~load_uint(256);
 }
 
-int get_last_claim_time(int user_id) method_id {
+int get_last_claimed_commission_time(int user_id) method_id {
     load_data();
-    (slice dict_value, int success) = storage::users_dict.udict_get?(256, user_id);
-
-    ifnot (success) {
-        return 0;
-    }
-    else { 
-        int last_ptr = dict_value~load_uint(32);
-        return last_ptr;
-    }
+    (slice dict_value, int success) = storage::nfts_dict.udict_get?(256, user_id);
+    return (success ? dict_value~load_uint(32) : 0);
 }
 
-int get_rewards_by_time(int time, int amount_in_stake) method_id {
-    (int last_commission, _, _) = storage::commission_dict.udict_get_preveq?(32, time);
+int get_claimable_commissions_by_time(int time, int staked_jvt) method_id {
+    (int last_commission, _, _) = storage::commissions_dict.udict_get_preveq?(32, time);
 
-    (slice commision_dict_value, _) = storage::commission_dict.udict_get?(32, storage::last_commission_time);
-
-    int last_sum  = commision_dict_value~load_uint(256); ;; last sum wich sedner_address didn't claim
+    (slice commision_dict_value, _) = storage::commissions_dict.udict_get?(32, storage::last_commission_time);
+    int claimed_commissions  = commision_dict_value~load_uint(256);  ;; last commission claimed by NFT
     
-    (commision_dict_value, _) = storage::commission_dict.udict_get?(32, storage::last_commission_time);
+    (commision_dict_value, _) = storage::commissions_dict.udict_get?(32, storage::last_commission_time);
+    int total_commissions  = commision_dict_value~load_uint(256);  ;; total commissionss
 
-    int curr_sum  = commision_dict_value~load_uint(256); ;; current sum
-
-    return muldiv(curr_sum - last_sum, amount_in_stake, sharecoms_devider);
+    return muldiv(total_commissions - claimed_commissions, staked_jvt, sharecoms_devider);
 }
 
 (slice, cell, cell, int, slice, cell, slice, slice, slice) get_storage_data() method_id {
     load_data();
-    return (storage::jetton_wallet_address, storage::users_dict, storage::commission_dict, 
+    return (storage::jetton_wallet_address, storage::nfts_dict, storage::commissions_dict, 
             storage::last_commission_time, storage::jvt_staking_address, storage::nft_item_code,
             storage::jvt_staking_address, storage::pool_address, storage::pool_admin_address);
 }
