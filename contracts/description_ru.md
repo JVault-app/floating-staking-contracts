@@ -3,7 +3,7 @@
 -	[pools_admin.fc](https://github.com/JVault-app/floating-staking-contracts/tree/optimized-draft/contracts/pools_admin.fc)
 -	[floating_staking_collection.fc](https://github.com/JVault-app/floating-staking-contracts/tree/optimized-draft/contracts/floating_staking_collection.fc)
 -	[nft_item.fc](https://github.com/JVault-app/floating-staking-contracts/tree/optimized-draft/contracts/nft_item.fc)
--   [sharecoms.fc](https://github.com/JVault-app/floating-staking-contracts/tree/optimized-draft/contracts/sharecoms.fc())
+-   [sharecoms.fc](https://github.com/JVault-app/floating-staking-contracts/tree/optimized-draft/contracts/sharecoms.fc)
 
 ## Про первые три
 
