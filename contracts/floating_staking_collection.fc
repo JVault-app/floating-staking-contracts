@@ -7,31 +7,32 @@
 
 global int storage::init?;                    ;; is collection initialized? (uint1)
 global int storage::next_item_index;          ;; next item index (uint32)
-
-global slice storage::admin_address;          ;; admin address (MsgAddress)
-global cell storage::collection_content;      ;; collection content (Cell)
-global cell storage::nft_item_code;           ;; NFT code (Cell)
-
-global int storage::start_time;               ;; timestamp of the start of the staking program (uint32)
-global int storage::end_time;                 ;; timestamp of the end of the staking program (uint32)
-global int storage::premint_open;             ;; is premint open? always zero for normal pools (uint1)
-
-global int storage::minimum_deposit;          ;; minimum deposit (Coins)
-global int storage::min_lock_period;          ;; minimum lock period in seconds (uint32)
-
-global int storage::farming_speed;            ;; current farming speed (Coins)
 global int storage::last_update_time;         ;; time of the last update (uint32)
+
+global cell storage::nft_item_code;           ;; NFT code (Cell)
+global cell storage::collection_content;      ;; collection content (Cell)
+
 global int storage::last_tvl;                 ;; current TVL (coins)
 global int storage::distributed_rewards;      ;; amount of rewards currently distributed among stakers (per `distributed_rewards_devider` jettons)
+
+global int storage::min_lock_period;          ;; minimum lock period in seconds (uint32)
+global int storage::farming_speed;            ;; current farming speed (Coins)
+
+global slice storage::rewards_wallet_address;  ;; address of jetton wallet for rewards jettons (MsgAddress)
 global int storage::rewards_balance;          ;; total rewards (Coins)
 global int storage::commission_factor;        ;; uint16. commission rate = commission_factor / commission_devider
 
-global int storage::wallet_rewards_changed;   ;; is rewards wallet initialized? (uint1)
 global int storage::wallet_lock_changed;      ;; is lock wallet initialized? (uint1)
+global int storage::wallet_rewards_changed;   ;; is rewards wallet initialized? (uint1)
+global int storage::premint_open;             ;; is premint open? always zero for normal pools (uint1)
 
-global slice storage::creator_address;         ;; creator address (MsgAddress)
+global int storage::start_time;               ;; timestamp of the start of the staking program (uint32)
+global int storage::end_time;                 ;; timestamp of the end of the staking program (uint32)
+global int storage::minimum_deposit;          ;; minimum deposit (Coins)
+
 global slice storage::lock_wallet_address;     ;; address of jetton wallet for locked jettons (MsgAddress)
-global slice storage::rewards_wallet_address;  ;; address of jetton wallet for rewards jettons (MsgAddress)
+global slice storage::admin_address;           ;; admin address (MsgAddress)
+global slice storage::creator_address;         ;; creator address (MsgAddress)
 
 
 () load_data() impure inline {
@@ -169,7 +170,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
             ifnot (equal_slices(sender_address, storage::rewards_wallet_address) & (new_end_time > time_now) &
                    ((new_end_time == storage::end_time) | equal_slices(from_address, storage::creator_address))) {
                 ;; return jettons if sender is incorrect wallet address or new_end_time < now or someone (not admin) trying to change end_time
-                send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1, 1, null());  
+                send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 1, null());  
                 return ();
             }
 
@@ -184,7 +185,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
                 int new_farming_speed = (storage::last_tvl != 0) ? muldiv(storage::rewards_balance, farming_speed_devider, (new_end_time - time_now)) : 0;
 
                 if ((new_farming_speed < storage::farming_speed) & (time_now < storage::end_time) & (storage::last_tvl > 0)) {  ;; it is impossible to decrease farming speed if staking hasn't ended
-                    send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1, 1, null());
+                    send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 1, null());
                     return ();
                 }
                 else {
@@ -197,7 +198,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
             }
             storage::end_time = new_end_time;
 
-            send_jettons(query_id, commission, storage::admin_address, storage::rewards_wallet_address, 0, 64, 0, gas::receive_commissions, begin_cell().store_uint(op::send_commissions, 32).end_cell());
+            send_jettons(query_id, commission, storage::admin_address, from_address, storage::rewards_wallet_address, 0, 64, gas::receive_commissions, begin_cell().store_uint(op::send_commissions, 32).end_cell());
         }
         else {  ;; stake jettons
             throw_if(exc::out_of_gas, msg_value < gas::stake);
@@ -213,7 +214,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
 
             ifnot ((equal_slices(sender_address, storage::lock_wallet_address) | (op == op::premint)) & (lock_period >= storage::min_lock_period) &
                    (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time)) {  ;; check sender & staking conditions
-                send_jettons(query_id, transferred_jettons, from_address, sender_address, 0, 64, 1, 0, null());
+                send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 0, null());
                 return ();
             } 
 
@@ -274,10 +275,10 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         storage::distributed_rewards += muldiv((time_now - storage::last_update_time) * storage::farming_speed, distributed_rewards_devider, (farming_speed_devider * storage::last_tvl));
 
         int user_rewards = muldiv(storage::distributed_rewards - nft_distributed_rewards, nft_locked_jettons, distributed_rewards_devider);
-        send_jettons(query_id, user_rewards, from_address, storage::rewards_wallet_address, gas::jetton_transfer, 0, 0, 1, null());  ;; send rewards
+        send_jettons(query_id, user_rewards, from_address, from_address, storage::rewards_wallet_address, gas::jetton_transfer, 0, 1, null());  ;; send rewards
 
         if ((op == op::withdraw_nft) & withdrawal_allowed) {
-            send_jettons(query_id, nft_locked_jettons * withdrawal_allowed, from_address, storage::lock_wallet_address, gas::jetton_transfer, 0, 0, 1, null());  ;; send withdrawed jettons
+            send_jettons(query_id, nft_locked_jettons * withdrawal_allowed, from_address, from_address, storage::lock_wallet_address, gas::jetton_transfer, 0, 1, null());  ;; send withdrawed jettons
             storage::last_tvl -= nft_locked_jettons;
             from_address = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"a;
         }
@@ -369,7 +370,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         throw_unless(exc::not_enough_jettons, jetton_amount <= storage::rewards_balance);
         
         raw_reserve(gas::min_tons_for_storage, 0);
-        send_jettons(query_id, jetton_amount, sender_address, storage::rewards_wallet_address, 0, 128, 1, 1, null());
+        send_jettons(query_id, jetton_amount, sender_address, sender_address, storage::rewards_wallet_address, 0, 128, 1, null());
         storage::rewards_balance -= jetton_amount;
         
         save_data();
@@ -395,7 +396,7 @@ global slice storage::rewards_wallet_address;  ;; address of jetton wallet for r
         }
 
         raw_reserve(gas::min_tons_for_storage, 0);
-        send_jettons(query_id, jetton_amount, sender_address, jetton_to_withdraw, 0, 128, 1, 1, null());
+        send_jettons(query_id, jetton_amount, sender_address, sender_address, jetton_to_withdraw, 0, 128, 1, null());
         return ();
     }
 
