@@ -1,3 +1,11 @@
+int workchain() asm "0 PUSHINT";
+
+() force_chain(slice addr) impure inline {
+  (int wc, _) = parse_std_addr(addr);
+  throw_unless(333, wc == workchain());
+}
+
+
 cell calculate_state_init(slice collection_address, cell nft_item_code, int item_index) inline {
     return begin_cell()
                 .store_uint(0, 2)
@@ -27,7 +35,6 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
             .begin_parse();
 }
 
-
 () deploy_nft_item(int item_index, cell nft_item_code, cell nft_content, slice collection_address) impure inline {
     cell state_init = calculate_state_init(collection_address, nft_item_code, item_index);
     slice nft_address = calculate_nft_item_address(nft_item_code, state_init);
@@ -40,7 +47,6 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
                     .store_ref(nft_content);
     send_raw_message(msg.end_cell(), 64); 
 }
-
 
 () send_jettons(int query_id, int jetton_amount, slice to_address, slice response_address, slice jetton_wallet_address, 
                 int msg_value, int sending_mode, int forward_ton_amount, cell forward_payload) impure inline {
@@ -95,7 +101,6 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
     send_raw_message(msg.end_cell(), sending_mode);  
 }
 
-
 () send_nft(int query_id, slice nft_address, slice to_address, 
             int msg_value, int sending_mode) impure inline {
 
@@ -136,7 +141,6 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
 
     send_raw_message(msg.end_cell(), send_mode);
 }
-
 
 int get_forward_fee(slice cs) inline {
     cs~load_msg_addr();  ;; skip dst

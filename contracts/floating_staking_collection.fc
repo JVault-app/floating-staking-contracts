@@ -1,6 +1,5 @@
 #pragma version >=0.4.0;
 #include "imports/stdlib.fc";
-#include "imports/params.fc";
 #include "imports/constants.fc";
 #include "imports/utils.fc";
 
@@ -111,7 +110,6 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
         return ();
     }
     slice sender_address = cs~load_msg_addr();
-    ;; int fwd_fee = get_forward_fee(cs);
 
     load_data();
 
@@ -242,12 +240,12 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
             cell nft_content = begin_cell()
                                     .store_uint(storage::next_item_index, 64)
                                     .store_slice(from_address)
-                                    .store_coins(transferred_jettons)
                                     .store_uint(time_now, 32)
                                     .store_uint(time_now + lock_period, 32)
-                                    .store_uint(storage::distributed_rewards, 256)
+                                    .store_coins(transferred_jettons)
                                     .store_uint(nft_transfer_allowed, 1)
                                     .store_uint(withdrawal_allowed, 1)
+                                    .store_uint(storage::distributed_rewards, 256)
                                 .end_cell();
             deploy_nft_item(storage::next_item_index, storage::nft_item_code, nft_content, my_address());  ;; deploy bond NFT
             storage::next_item_index += 1;
@@ -280,7 +278,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
         if ((op == op::withdraw_nft) & withdrawal_allowed) {
             send_jettons(query_id, nft_locked_jettons * withdrawal_allowed, from_address, from_address, storage::lock_wallet_address, gas::jetton_transfer, 0, 1, null());  ;; send withdrawed jettons
             storage::last_tvl -= nft_locked_jettons;
-            from_address = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"a;
+            from_address = burn_address;
         }
         else {
             builder change_nft_state_msg = begin_cell()
@@ -400,28 +398,16 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
         return ();
     }
 
-    ;; opportunity to change code & data before audit (will be removed in the future)
-    ;; if (op == 0xfffe) { 
-    ;;     ;; throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
-    ;;     set_data(in_msg_body~load_ref());
-    ;;     return ();
-    ;; }
-    ;; if (op == 0xffff) { 
-    ;;     ;; throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
-    ;;     set_code(in_msg_body~load_ref());
-    ;;     return ();
-    ;; }
-
     throw(exc::unsupported_op);
 }
 
 
-;; Get methods
+;; GET methods
 
 (int, cell, slice) get_collection_data() method_id {
   load_data();
   slice cs = storage::collection_content.begin_parse();
-  return (storage::next_item_index, cs~load_ref(), "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"a);
+  return (storage::next_item_index, cs~load_ref(), burn_address);
 }
 
 slice get_nft_address_by_index(int index) method_id {

@@ -1,18 +1,21 @@
 #pragma version >=0.4.0;
 #include "imports/stdlib.fc";
-#include "imports/params.fc";
 #include "imports/constants.fc";
 #include "imports/utils.fc";
 
 
 global int storage::init?;                     ;; is NFT initialized? (uint1)
+
 global int storage::collection_index;          ;; index of this NFT in collection (uint32)
 global slice storage::collection_address;      ;; address of NFT collection (MsgAddress)
+
 global slice storage::owner_address;           ;; address of the NFT owner (MsgAddress)
-global int storage::locked_value;              ;; amount of locked coins (Coins)
 global int storage::start_time;                ;; staking start timestamp (uint32)
 global int storage::unlock_time;               ;; jettons unlock timestamp (uint32) 
+
+global int storage::locked_value;              ;; amount of locked coins (Coins)
 global int storage::claimed_rewards;           ;; claimed rewards (Coins)
+
 global int storage::is_transferrable;          ;; does this NFT allows transfers (uint1)
 global int storage::withdrawal_allowed;        ;; does this NFT allow to withdraw staked jettons? always 1 for normal pools (uint1)
 global int storage::is_active;                 ;; does this NFT accept any actions with it (uint1)
@@ -30,13 +33,17 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     if (ds.slice_bits() > 0) {
         storage::init?               = 1;
         storage::owner_address       = ds~load_msg_addr();
-        storage::locked_value        = ds~load_coins();
-        storage::unlock_time         = ds~load_uint(32);
-        storage::claimed_rewards     = ds~load_coins();
+
         storage::start_time          = ds~load_uint(32);
+        storage::unlock_time         = ds~load_uint(32);
+
+        storage::locked_value        = ds~load_coins();
+        storage::claimed_rewards     = ds~load_coins();
+
         storage::is_transferrable    = ds~load_uint(1);
         storage::withdrawal_allowed  = ds~load_uint(1);
         storage::is_active           = ds~load_uint(1);
+
         ds = ds~load_ref().begin_parse();
         storage::distributed_rewards = ds~load_uint(256);
     }
@@ -49,17 +56,15 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
             .store_uint(storage::collection_index, 32)
             .store_slice(storage::collection_address)
             .store_slice(storage::owner_address)
-            .store_coins(storage::locked_value)
-            .store_uint(storage::unlock_time, 32)
-            .store_coins(storage::claimed_rewards)
             .store_uint(storage::start_time, 32)
+            .store_uint(storage::unlock_time, 32)
+            .store_coins(storage::locked_value)
+            .store_coins(storage::claimed_rewards)
             .store_uint(storage::is_transferrable, 1)
             .store_uint(storage::withdrawal_allowed, 1)
             .store_uint(storage::is_active, 1)
             .store_ref(
-                begin_cell()
-                    .store_uint(storage::distributed_rewards, 256)
-                .end_cell()
+                begin_cell().store_uint(storage::distributed_rewards, 256).end_cell()
             )
             .end_cell()
     );
@@ -124,15 +129,15 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         throw_unless(405, equal_slices(storage::collection_address, sender_address));
         in_msg_body~skip_bits(64);
         storage::owner_address       = in_msg_body~load_msg_addr();
-        storage::locked_value        = in_msg_body~load_coins();
         storage::start_time          = in_msg_body~load_uint(32);
         storage::unlock_time         = in_msg_body~load_uint(32);
-        storage::distributed_rewards = in_msg_body~load_uint(256);
+        storage::locked_value        = in_msg_body~load_coins();
+        storage::claimed_rewards     = 0;
         storage::is_transferrable    = in_msg_body~load_uint(1);
         storage::withdrawal_allowed  = in_msg_body~load_uint(1);
         storage::is_active           = 1;
-        storage::claimed_rewards     = 0;
-
+        storage::distributed_rewards = in_msg_body~load_uint(256);
+        
         var msg = begin_cell()
                       .store_uint(0x10, 6) 
                       .store_slice(storage::owner_address)
@@ -254,9 +259,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 }
 
 
-;;
-;;  GET Methods
-;;
+;; GET methods
 
 (int, int, slice, slice, cell) get_nft_data() method_id {
   load_data();
@@ -268,13 +271,6 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address,
             storage::locked_value, storage::start_time, storage::unlock_time, storage::claimed_rewards,
             storage::is_transferrable, storage::is_active, storage::distributed_rewards);
-}
-
-(int, int, int, int, int, int, slice, slice, int, int, int) get_nft_content() method_id {  ;; legacy
-    load_data();
-    return (storage::claimed_rewards, storage::start_time, storage::unlock_time - storage::start_time,
-             storage::locked_value, 0, storage::collection_index, storage::owner_address, 
-             storage::collection_address, storage::is_transferrable, storage::is_active, storage::distributed_rewards);
 }
 
 (int) get_version() method_id {

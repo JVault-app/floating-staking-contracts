@@ -1,19 +1,34 @@
 #pragma version >=0.4.0;
 #include "imports/stdlib.fc";
-#include "imports/params.fc";
 #include "imports/constants.fc";
 #include "imports/utils.fc";
 
-global int   storage::creation_fee;
-global slice storage::jvt_staking_address;
-global slice storage::jvt_wallet_address;
-global slice storage::team_address;
-global slice storage::conversion_address;
+global int   storage::creation_fee;         ;; Amount of JVT required for creating new staking pool. (Coins)
+global slice storage::jvt_staking_address;  ;; Address of the current JVT staking pool. (MsgAddress)
+global slice storage::jvt_wallet_address;   ;; Address of the JVT jetton wallet of this smart-contract. (MsgAddress)
 
-global cell  storage::sharecoms_code;
-global cell  storage::staking_pool_code;
-global cell  storage::nft_item_code;
-;; global cell  storage::all_pools;
+global cell  storage::sharecoms_code;       ;; Code of the sharecoms.fc smart-contract. (Cell)
+global cell  storage::staking_pool_code;    ;; Code of the staking pool (floating_staking_collection.fc) smart-contract. (Cell)
+global cell  storage::nft_item_code;        ;; Code of the Bond NFT item (nft_item.fc) smart-contract. (Cell)
+
+global slice storage::team_address;         ;; Address of the main project wallet. (MsgAddress)
+global slice storage::conversion_address;   ;; Address of the wallet from which commissions are being converting to JVT. (MsgAddress) 
+
+
+() load_data() impure inline {
+    slice ds = get_data().begin_parse();
+    storage::creation_fee        = ds~load_coins();
+    storage::jvt_staking_address = ds~load_msg_addr();
+    storage::jvt_wallet_address  = ds~load_msg_addr();
+
+    storage::sharecoms_code      = ds~load_ref();
+    storage::staking_pool_code   = ds~load_ref();
+    storage::nft_item_code       = ds~load_ref();
+
+    slice owners = ds~load_ref().begin_parse();
+    storage::team_address        = owners~load_msg_addr();
+    storage::conversion_address  = owners~load_msg_addr(); 
+}
 
 
 () save_data() impure inline {
@@ -36,23 +51,7 @@ global cell  storage::nft_item_code;
 }
 
 
-() load_data() impure inline {
-    slice ds = get_data().begin_parse();
-    storage::creation_fee        = ds~load_coins();
-    storage::jvt_staking_address = ds~load_msg_addr();
-    storage::jvt_wallet_address  = ds~load_msg_addr();
-    storage::sharecoms_code      = ds~load_ref();
-    storage::staking_pool_code   = ds~load_ref();
-    storage::nft_item_code       = ds~load_ref();
-
-    slice owners = ds~load_ref().begin_parse();
-    storage::team_address        = owners~load_msg_addr();
-    storage::conversion_address  = owners~load_msg_addr(); 
-}
-
-
-slice deploy_staking_pool(slice pool_content) impure inline {
-    ;; deploys new staking pool contract and returns its address
+slice deploy_staking_pool(slice pool_content) impure inline {  ;; deploys new staking pool contract and returns its address
     cell pool_data = begin_cell()
                         .store_uint(0, 65)
                         .store_ref(storage::nft_item_code)
@@ -86,8 +85,7 @@ slice deploy_staking_pool(slice pool_content) impure inline {
 }
 
 
-slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure inline {
-    ;; deploys new sharecoms contract and returns its address
+slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure inline {  ;; deploys new sharecoms contract and returns its address
     cell sharecoms_data = begin_cell()
                                 .store_slice(pool_address)
                                 .store_slice(my_address())
@@ -178,7 +176,6 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
             slice sharecoms_address = deploy_sharecoms(rewards_jetton_address, pool_address);
 
             burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, 0, 128);  ;; burn fees   
-            
             return ();
         }
         
@@ -226,7 +223,6 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         int jetton_amount = in_msg_body~load_coins();
         send_jettons(query_id, jetton_amount, storage::team_address, storage::team_address, jetton_wallet_address, 0, 64, 1, null());
-
         return ();
     }
 
@@ -239,7 +235,6 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                         .store_coins(msg_value)
                         .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
         send_raw_message(msg.end_cell(), 128); 
-        
         return ();
     }
     
@@ -252,7 +247,6 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
     if (op == 10) {  ;; change creation fee
         storage::creation_fee = in_msg_body~load_coins();
         save_data();
-
         notify_owner("Creation fee was changed");
         return ();
     }
@@ -261,35 +255,30 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         storage::nft_item_code = in_msg_body~load_ref();
         storage::sharecoms_code = in_msg_body~load_ref();
         save_data();
-
         notify_owner("Smc code was changed");
         return ();
     }
     if (op == 12) {  ;; change team_address
         storage::team_address = in_msg_body~load_msg_addr();
         save_data();
-
         notify_owner("Team address was changed");
         return ();
     }
     if (op == 13) {  ;; change conversion_address
         storage::conversion_address = in_msg_body~load_msg_addr();
         save_data();
-
         notify_owner("Conversion address was changed");
         return ();
     }
     if (op == 14) {
         storage::jvt_wallet_address = in_msg_body~load_msg_addr();
         save_data();
-
         notify_owner("JVT wallet address was changed");
         return ();
     }
     if (op == 15) {
         storage::jvt_staking_address = in_msg_body~load_msg_addr();
         save_data();
-
         notify_owner("JVT staking pool address was changed");
         return ();
     }

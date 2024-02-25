@@ -83,7 +83,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
     send_jettons(query_id, nft_share, nft_owner_address, nft_owner_address, storage::jetton_wallet_address, 0, 64, 1, null());
 
     storage::nfts_dict~udict_set(256, user_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
-    
+
     save_data();
     return ();
 }
@@ -238,21 +238,12 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
         return ();
     }
 
-    ;; opportunity to change code & data before audit (will be removed in the future)
-
-    ;; if (op == 0xfffe) { 
-    ;;     set_data(in_msg_body~load_ref());
-    ;;     return ();
-    ;; }
-    ;; if (op == 0xffff) { 
-    ;;     set_code(in_msg_body~load_ref());
-    ;;     return ();
-    ;; }
-
     throw(0xffff);
 }
 
-;; getters 
+
+;; GET methods
+
 slice get_jetton_wallet_adress() method_id {
     load_data();
     return storage::jetton_wallet_address;
