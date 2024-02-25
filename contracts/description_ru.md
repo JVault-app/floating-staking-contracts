@@ -38,7 +38,7 @@
 5) `jetton_wallet_address`. Адрес jetton_wallet, в котором сохраняются пришедшие комиссии.
 6) `nft_item_code`. Код JVT bond NFTs. Используется для проверки на валидность отправленных запросов на клейм.
 7) `nfts_dict`. Ключ - uint256 часть адреса JVT Bond NFT, значение - время прихода последней заклеймленной этой NFT комиссии. До того, как по какой-то Bond NFT произошел клейм, адреса этой NFT нет в словаре.
-8) `commissions_dict`. Ключ - время получения комиссии, значение - доступная для клейма сумма комиссий в пересчете на `sharecoms_devider` застейканных JVT. Первый элемент словаря `0: 0`. 
+8) `commissions_dict`. Ключ - время получения комиссии, значение - сумма пришедших на адрес `sharecoms` комиссий в пересчете на `sharecoms_devider` застейканных JVT. Первый элемент словаря `0: 0`. 
 9) Также есть константа `sharecoms_devider` - случайно выбранное большое число для реализации арифметики над числами с фиксированной точкой (не хранится в c4)
 <!-- <br><br> -->
 
@@ -50,9 +50,9 @@
     + Контракт стейкинг-пула JVT в качестве ответа отправляет на адрес `sharecoms` актуальное значение своего c4 (в с4 содержится значение TVL пула) вместе с полученным forward payload 
     + `Sharecoms` проверяет, что ответ пришел от нужного контракта, а также, что запрос был отправлен самим `sharecoms`, и обновляет `commissions_dict` и `last_commission_time`. В `commissions_dict` записывается пара `(commission_arrival_time, sharecoms_devider * commission_amount / jvt_pool_tvl)`.
 3) Владелец JVT Bond NFT может заклеймить свои награды, отправив на адрес NFT сообщение с `op = op::get_storage_data` и списком адресов `sharecoms`, с которых он хочет заклеймить награду. Список реализован в виде HashMapE, в котором ключ - индекс в "списке", значение - адрес `sharecoms`. Количество адресов так же указывается в сообщении и не может превышать 128. `Sharecoms` проверяет, что данные были отправлены от NFT из нужной коллекции, и что NFT активна. После этого `sharecoms` отправляет владельцу NFT его долю комиссий, которая высчитывается следующим образом:
-    + `last_claimed_commission_time := nfts_dict.udict_get(nft_address)` - время прихода последней заклеймленной по данной NFT комиссиии. Если клейма по этой NFT еще не было, то `last_claimed_commission_time = 0`.
-    + `total_commissions := commissions_dict.get(last_commission_time)` - сколько суммарно доступно для клейма в пересчете на `sharecoms_devider` застейканных JVT;
-    + `claimed_commissions := commissions_dict.get(last_claimed_commission_time)` - сколько наград в пересчете на `sharecoms_devider` застейканных JVT уже было заклеймлено по данной NFT
+    + `last_claimed_commission_time := nfts_dict.udict_get(nft_address)` - время прихода последней заклеймленной по данной NFT комиссиии. Если клейма по этой NFT еще не было, то `last_claimed_commission_time = max({x ∈ commissions_dict.keys() | x < nft_mint_time})`, то есть last_claimed_commission_time - максимальное время прихода комиссии, меньшее чем время минта NFT.
+    + `total_commissions := commissions_dict.get(last_commission_time)` - сколько суммарно комиссий в пересчете на `sharecoms_devider` застейканных JVT пришло на контракт `sharecoms` с деплоя до текущего момента;
+    + `claimed_commissions := commissions_dict.get(last_claimed_commission_time)` - сколько комиссий в пересчете на `sharecoms_devider` застейканных JVT пришло на контракт `sharecoms` с деплоя до момента последнего клейма по этой NFT
     + `nft_share := (total_commissions - claimed_commissions) * staked_jvt / sharecoms_devider` - количество жетонов, которые будут отправлены пользователю в качестве его доли от комиссий. Здесь staked_jvt - количество застейканных владельцем NFT токенов JVT (атрибут NFT).
 
 ## Общая схема работы контрактов:
