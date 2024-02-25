@@ -83,6 +83,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
     send_jettons(query_id, nft_share, nft_owner_address, nft_owner_address, storage::jetton_wallet_address, 0, 64, 1, null());
 
     storage::nfts_dict~udict_set(256, user_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
+    
     save_data();
     return ();
 }
@@ -148,6 +149,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
         slice payload      = in_msg_body~load_ref().begin_parse();
 
         int inner_op = payload~load_uint(32);
+
         if (inner_op == op::update_sharecoms) {
             throw_unless(exc::incorrect_sender, 
                          equal_slices(from_address, my_address()) & equal_slices(sedner_address, storage::jvt_staking_address));
@@ -202,7 +204,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
     if (op == op::transfer_notification) {
         throw_unless(exc::incorrect_jetton, equal_slices(sedner_address, storage::jetton_wallet_address));
 
-        int transferred_jettons = in_msg_body~load_coins();
+        int commission_amount = in_msg_body~load_coins();
         builder msg = begin_cell()
                         .store_uint(0x18, 6)
                         .store_slice(storage::jvt_staking_address)
@@ -214,7 +216,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
                         .store_ref(
                             begin_cell()
                                 .store_uint(op::update_sharecoms, 32)
-                                .store_coins(transferred_jettons)
+                                .store_coins(commission_amount)
                             .end_cell()
                         );
         send_raw_message(msg.end_cell(), 64);
