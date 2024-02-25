@@ -85,6 +85,6 @@ const int op::claim_commissions    = 0xbca8f067;
 
 const int commission_devider = 100000;
 const int farming_speed_devider = 24 * 60 * 60;
-const int distributed_rewards_devider = 1000000000000000000000000000000;
-const int sharecoms_devider = 1000000000000000000000000000000;
+const int distributed_rewards_devider = 100000000000000000000000000000000000000;
+const int sharecoms_devider = 100000000000000000000000000000000000000;
 const slice burn_address = "EQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAM9c"a;
