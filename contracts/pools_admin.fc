@@ -309,6 +309,11 @@ int get_creation_fee() method_id {
     return (storage::team_address, storage::conversion_address);
 }
 
+(cell, cell, cell) get_codes() method_id {
+    load_data();
+    return (storage::staking_pool_code, storage::nft_item_code, storage::sharecoms_code);
+}
+
 (cell) raw_get_data() method_id {
     return get_data();
 }
