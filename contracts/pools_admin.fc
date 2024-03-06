@@ -299,6 +299,27 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 
 ;; GET methods
 
+slice get_sharecoms_by_pool(slice pool_address) method_id {
+    load_data();
+    cell sharecoms_data = begin_cell()
+                                .store_slice(pool_address)
+                                .store_slice(my_address())
+                            .end_cell();
+
+    cell sharecoms_state_init = begin_cell()
+                                    .store_uint(0, 2)
+                                    .store_dict(storage::sharecoms_code)
+                                    .store_dict(sharecoms_data)
+                                    .store_uint(0, 1)
+                                .end_cell();
+
+    return begin_cell()
+                .store_uint(4, 3)
+                .store_int(workchain(), 8)
+                .store_uint(cell_hash(sharecoms_state_init), 256)
+            .end_cell().begin_parse();
+}
+
 int get_creation_fee() method_id {
     load_data();
     return storage::creation_fee;
