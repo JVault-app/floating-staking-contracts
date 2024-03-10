@@ -71,10 +71,12 @@ const int op::close_premint          = 0xcb900de;
 const int op::withdraw_rewards       = 0x7;
 const int op::change_min_deposit     = 0x8;
 const int op::withdraw_accident_jettons = 0x9;
+const int op::change_collection_content = 0x167e65da;
 
 ;; Pools admin
 const int op::deploy_new_pool      = 0xda861f17;
 const int op::send_commissions     = 0xb96adaea;
+const int op::change_host          = 0x5369681a;
 
 ;; Sharecoms
 const int op::update_sharecoms     = 0xc482170f;

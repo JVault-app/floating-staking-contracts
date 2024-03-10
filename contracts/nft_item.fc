@@ -10,6 +10,7 @@ global int storage::collection_index;          ;; index of this NFT in collectio
 global slice storage::collection_address;      ;; address of NFT collection (MsgAddress)
 
 global slice storage::owner_address;           ;; address of the NFT owner (MsgAddress)
+
 global int storage::start_time;                ;; staking start timestamp (uint32)
 global int storage::unlock_time;               ;; jettons unlock timestamp (uint32) 
 
@@ -274,5 +275,5 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 }
 
 (int) get_version() method_id {
-    return 5;
+    return 3005;
 }

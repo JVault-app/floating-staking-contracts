@@ -283,3 +283,8 @@ int get_claimable_commissions_by_time(int time, int staked_jvt) method_id {
 cell raw_get_data() method_id {
     return (get_data());
 }
+
+
+int get_version() method_id {
+    return 4001;
+}

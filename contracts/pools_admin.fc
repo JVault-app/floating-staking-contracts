@@ -4,6 +4,8 @@
 #include "imports/utils.fc";
 
 global int   storage::creation_fee;         ;; Amount of JVT required for creating new staking pool. (Coins)
+global int   storage::change_content_fee;   ;; Amount of JVT required for change data in staking pool. (Coins)
+
 global slice storage::jvt_staking_address;  ;; Address of the current JVT staking pool. (MsgAddress)
 global slice storage::jvt_wallet_address;   ;; Address of the JVT jetton wallet of this smart-contract. (MsgAddress)
 
@@ -14,10 +16,14 @@ global cell  storage::nft_item_code;        ;; Code of the Bond NFT item (nft_it
 global slice storage::team_address;         ;; Address of the main project wallet. (MsgAddress)
 global slice storage::conversion_address;   ;; Address of the wallet from which commissions are being converting to JVT. (MsgAddress) 
 
+global slice storage::host;                 ;; prefix of database link
+
 
 () load_data() impure inline {
     slice ds = get_data().begin_parse();
     storage::creation_fee        = ds~load_coins();
+    storage::change_content_fee  = ds~load_coins();
+
     storage::jvt_staking_address = ds~load_msg_addr();
     storage::jvt_wallet_address  = ds~load_msg_addr();
 
@@ -25,9 +31,10 @@ global slice storage::conversion_address;   ;; Address of the wallet from which 
     storage::staking_pool_code   = ds~load_ref();
     storage::nft_item_code       = ds~load_ref();
 
-    slice owners = ds~load_ref().begin_parse();
-    storage::team_address        = owners~load_msg_addr();
-    storage::conversion_address  = owners~load_msg_addr(); 
+    ds = ds~load_ref().begin_parse();
+    storage::team_address        = ds~load_msg_addr();
+    storage::conversion_address  = ds~load_msg_addr(); 
+    storage::host                = ds~load_ref().begin_parse();
 }
 
 
@@ -35,8 +42,11 @@ global slice storage::conversion_address;   ;; Address of the wallet from which 
     set_data(
         begin_cell()
             .store_coins(storage::creation_fee)
+            .store_coins(storage::change_content_fee)
+
             .store_slice(storage::jvt_staking_address)
             .store_slice(storage::jvt_wallet_address)
+
             .store_ref(storage::sharecoms_code)
             .store_ref(storage::staking_pool_code)
             .store_ref(storage::nft_item_code)
@@ -44,6 +54,11 @@ global slice storage::conversion_address;   ;; Address of the wallet from which 
                 begin_cell()
                     .store_slice(storage::team_address)
                     .store_slice(storage::conversion_address)
+                    .store_ref(
+                        begin_cell()
+                        .store_slice(storage::host)
+                        .end_cell()
+                    )
                 .end_cell()
             )
         .end_cell()
@@ -210,6 +225,50 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 
             return ();
         }
+
+        if(inner_op == op::change_collection_content) {
+            slice to_address               = payload~load_msg_addr();
+            slice collection_rename        = payload~load_ref().begin_parse();
+            slice nft_rename               = payload~load_ref().begin_parse();
+            
+            throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::jvt_wallet_address));
+
+            if (jetton_amount < storage::change_content_fee) {
+                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, 128, 1, begin_cell().store_slice("Not enough JVT.").end_cell());
+                return ();
+            }
+
+            burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, gas::burn_jetton, 0);
+
+            builder msg = begin_cell()
+                            .store_uint(0x18, 6)
+                            .store_slice(to_address)
+                            .store_coins(0)
+                            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                            .store_uint(op::change_collection_content, 32)
+                            .store_uint(query_id, 64)
+                            .store_slice(from_address)
+                            .store_ref(
+                                begin_cell()
+                                .store_ref(
+                                    begin_cell()
+                                        .store_slice(storage::host)
+                                        .store_slice(collection_rename)
+                                    .end_cell()
+                                )
+                                .store_ref(
+                                    begin_cell()
+                                        .store_slice(storage::host)
+                                        .store_slice(nft_rename)
+                                    .end_cell()
+                                )
+                                .end_cell()
+                            );
+            
+            send_raw_message(msg.end_cell(), 128);
+
+            return ();
+        }
     }
 
     if (op == op::excesses) { 
@@ -282,6 +341,11 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         notify_owner("JVT staking pool address was changed");
         return ();
     }
+    if(op == 16) {
+        storage::change_content_fee = in_msg_body~load_coins();
+        notify_owner("Change content fee was changed ");
+        return ();
+    }
     if (op == 0xfffe) {  ;; set data
         set_data(in_msg_body~load_ref());
         notify_owner("Pool admin data was changed");
@@ -290,6 +354,13 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
     if (op == 0xffff) {  ;; set code
         notify_owner("Pool admin code was changed");
         set_code(in_msg_body~load_ref());
+        return ();
+    }
+
+    if(op == op::change_host) { 
+        storage::host = in_msg_body~load_ref().begin_parse();
+        save_data();
+        notify_owner("Host was change");
         return ();
     }
 
@@ -314,5 +385,5 @@ int get_creation_fee() method_id {
 }
 
 int get_version() method_id {
-    return 5;
+    return 1005;
 }
