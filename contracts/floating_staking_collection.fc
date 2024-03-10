@@ -40,6 +40,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     storage::init?                  = ds~load_uint(1);
     storage::next_item_index        = ds~load_uint(32);
     storage::last_update_time       = ds~load_uint(32);
+    storage::admin_address          = ds~load_msg_addr();
 
     storage::nft_item_code          = ds~load_ref();
     storage::collection_content     = ds~load_ref();
@@ -50,7 +51,6 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     storage::min_lock_period        = ds~load_uint(32);
     storage::farming_speed          = ds~load_coins();
 
-    storage::rewards_wallet_address = ds~load_msg_addr();
     storage::rewards_balance        = ds~load_coins();
     storage::commission_factor      = ds~load_uint(16);
 
@@ -64,7 +64,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     storage::minimum_deposit        = ds~load_coins();
 
     storage::lock_wallet_address    = ds~load_msg_addr();
-    storage::admin_address          = ds~load_msg_addr();
+    storage::rewards_wallet_address = ds~load_msg_addr();
     storage::creator_address        = ds~load_msg_addr();
 }
 
@@ -75,13 +75,13 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
         .store_uint(storage::init?, 1)
         .store_uint(storage::next_item_index, 32)
         .store_uint(storage::last_update_time, 32)
+        .store_slice(storage::admin_address)
         .store_ref(storage::nft_item_code)
         .store_ref(storage::collection_content)
         .store_coins(storage::last_tvl)
         .store_uint(storage::distributed_rewards, 256)
         .store_uint(storage::min_lock_period, 32)
         .store_coins(storage::farming_speed)
-        .store_slice(storage::rewards_wallet_address)
         .store_coins(storage::rewards_balance)
         .store_uint(storage::commission_factor, 16)
         .store_uint(storage::wallet_lock_changed, 1)
@@ -93,7 +93,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
                 .store_uint(storage::end_time, 32)
                 .store_coins(storage::minimum_deposit)
                 .store_slice(storage::lock_wallet_address)
-                .store_slice(storage::admin_address)
+                .store_slice(storage::rewards_wallet_address)
                 .store_slice(storage::creator_address)
             .end_cell()
         )

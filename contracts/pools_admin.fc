@@ -54,6 +54,7 @@ global slice storage::conversion_address;   ;; Address of the wallet from which 
 slice deploy_staking_pool(slice pool_content) impure inline {  ;; deploys new staking pool contract and returns its address
     cell pool_data = begin_cell()
                         .store_uint(0, 65)
+                        .store_slice(my_address())
                         .store_ref(storage::nft_item_code)
                         .store_slice(pool_content)
                     .end_cell();
