@@ -211,7 +211,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
             } 
 
             ifnot ((equal_slices(sender_address, storage::lock_wallet_address) | (op == op::premint)) & (lock_period >= storage::min_lock_period) &
-                   (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time)) {  ;; check sender & staking conditions
+                   (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time) & (time_now + lock_period > 0xffffffff)) {  ;; check sender & staking conditions
                 send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 0, null());
                 return ();
             } 
@@ -340,6 +340,23 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     }
 
     ;; Admin commands
+
+    if(op == op::change_collection_content) { 
+        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
+        throw_unless(exc::incorrect_sender, equal_slices(in_msg_body~load_msg_addr(), storage::creator_address));
+        
+        storage::collection_content = in_msg_body~load_ref();
+
+        builder msg = begin_cell()
+                        .store_uint(0x10, 6)
+                        .store_slice(storage::creator_address)
+                        .store_coins(0)
+                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+        send_raw_message(msg.end_cell(), 64); 
+        
+        save_data();
+        return();
+    }
     
     if (op == op::close_premint) {
         throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::creator_address));
@@ -462,5 +479,5 @@ cell get_nft_content(int index, cell individual_content) method_id {
 }
 
 (int) get_version() method_id {
-    return 5;
+    return 2005;
 }
