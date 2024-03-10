@@ -1,24 +1,46 @@
-import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode } from '@ton/core';
+import { Address, beginCell, Cell, Contract, contractAddress, ContractProvider, Sender, SendMode, Slice } from '@ton/core';
 
 export type PoolsAdminConfig = {
+    creationFee: bigint;
+    changeFee: bigint;
+    jvtStakingAddress: Address;
+    jvtWalletAddress: Address;
+
+    sharecomsCode: Cell;
     stakingPoolCode: Cell;
     nftItemCode: Cell;
-    sharecomsCode: Cell;
-    creationFee: bigint;
-    ownerAddress1: Address;
-    ownerAddress2: Address;
+    
+    teamAddress: Address;
+    conversionAddress: Address;
+    
+    host: string;
 };
 
 export function poolsAdminConfigToCell(config: PoolsAdminConfig): Cell {
     return beginCell()
-                .storeRef(beginCell().endCell())
+                .storeCoins(config.creationFee)
+                .storeCoins(config.changeFee)
+
+                .storeAddress(config.jvtStakingAddress)
+                .storeAddress(config.jvtWalletAddress)
+
+                .storeRef(config.sharecomsCode)
                 .storeRef(config.stakingPoolCode)
                 .storeRef(config.nftItemCode)
-                .storeRef(config.sharecomsCode)
-                .storeCoins(config.creationFee)
-                .storeAddress(config.ownerAddress1)  // main owner
-                .storeAddress(config.ownerAddress2)  // address for distribution part of income to JVT holders
-            .endCell();
+                
+                .storeRef(
+                    beginCell()
+                    .storeAddress(config.teamAddress)  // main owner
+                    .storeAddress(config.conversionAddress)  // address for distribution part of income to JVT holders
+                    .storeRef(
+                        beginCell()
+                        .storeStringTail(config.host)
+                        .endCell()
+                    )
+                    .endCell()
+                )
+            
+                .endCell();
 }
 
 export class PoolsAdmin implements Contract {
