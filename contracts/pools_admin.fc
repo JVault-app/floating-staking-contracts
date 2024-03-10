@@ -4,7 +4,7 @@
 #include "imports/utils.fc";
 
 global int   storage::creation_fee;         ;; Amount of JVT required for creating new staking pool. (Coins)
-global int   storage::change_content_fee;   ;; Amount of JVT required for change data in staking pool. (Coins)
+global int   storage::change_content_fee;   ;; Amount of JVT required for changing content of staking pool. (Coins)
 
 global slice storage::jvt_staking_address;  ;; Address of the current JVT staking pool. (MsgAddress)
 global slice storage::jvt_wallet_address;   ;; Address of the JVT jetton wallet of this smart-contract. (MsgAddress)
@@ -16,7 +16,7 @@ global cell  storage::nft_item_code;        ;; Code of the Bond NFT item (nft_it
 global slice storage::team_address;         ;; Address of the main project wallet. (MsgAddress)
 global slice storage::conversion_address;   ;; Address of the wallet from which commissions are being converting to JVT. (MsgAddress) 
 
-global slice storage::host;                 ;; prefix of database link
+global cell storage::content_host;          ;; Prefix of link to NFT collections' content
 
 
 () load_data() impure inline {
@@ -34,7 +34,7 @@ global slice storage::host;                 ;; prefix of database link
     ds = ds~load_ref().begin_parse();
     storage::team_address        = ds~load_msg_addr();
     storage::conversion_address  = ds~load_msg_addr(); 
-    storage::host                = ds~load_ref().begin_parse();
+    storage::content_host        = ds~load_ref();
 }
 
 
@@ -54,11 +54,7 @@ global slice storage::host;                 ;; prefix of database link
                 begin_cell()
                     .store_slice(storage::team_address)
                     .store_slice(storage::conversion_address)
-                    .store_ref(
-                        begin_cell()
-                        .store_slice(storage::host)
-                        .end_cell()
-                    )
+                    .store_ref(storage::content_host)
                 .end_cell()
             )
         .end_cell()
@@ -228,9 +224,9 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         }
 
         if(inner_op == op::change_collection_content) {
-            slice to_address               = payload~load_msg_addr();
-            slice collection_rename        = payload~load_ref().begin_parse();
-            slice nft_rename               = payload~load_ref().begin_parse();
+            slice pool_address            = payload~load_msg_addr();
+            cell collection_content_link  = payload~load_ref();
+            cell nft_content_link         = payload~load_ref();
             
             throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::jvt_wallet_address));
 
@@ -243,7 +239,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 
             builder msg = begin_cell()
                             .store_uint(0x18, 6)
-                            .store_slice(to_address)
+                            .store_slice(pool_address)
                             .store_coins(0)
                             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                             .store_uint(op::change_collection_content, 32)
@@ -253,14 +249,14 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                                 begin_cell()
                                 .store_ref(
                                     begin_cell()
-                                        .store_slice(storage::host)
-                                        .store_slice(collection_rename)
+                                        .store_slice(storage::content_host.begin_parse())
+                                        .store_ref(collection_content_link)
                                     .end_cell()
                                 )
                                 .store_ref(
                                     begin_cell()
-                                        .store_slice(storage::host)
-                                        .store_slice(nft_rename)
+                                        .store_slice(storage::content_host.begin_parse())
+                                        .store_ref(nft_content_link)
                                     .end_cell()
                                 )
                                 .end_cell()
@@ -359,9 +355,9 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
     }
 
     if(op == op::change_host) { 
-        storage::host = in_msg_body~load_ref().begin_parse();
+        storage::content_host = in_msg_body~load_ref();
         save_data();
-        notify_owner("Host was change");
+        notify_owner("Content host was changed");
         return ();
     }
 
@@ -412,5 +408,5 @@ int get_creation_fee() method_id {
 }
 
 int get_version() method_id {
-    return 1005;
+    return 2000;
 }

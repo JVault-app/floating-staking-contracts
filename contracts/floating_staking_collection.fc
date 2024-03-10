@@ -342,8 +342,8 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     ;; Admin commands
 
     if(op == op::change_collection_content) { 
-        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
-        throw_unless(exc::incorrect_sender, equal_slices(in_msg_body~load_msg_addr(), storage::creator_address));
+        throw_unless(exc::incorrect_sender, 
+                     equal_slices(sender_address, storage::admin_address) & equal_slices(in_msg_body~load_msg_addr(), storage::creator_address));
         
         storage::collection_content = in_msg_body~load_ref();
 
@@ -351,7 +351,8 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
                         .store_uint(0x10, 6)
                         .store_slice(storage::creator_address)
                         .store_coins(0)
-                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+                        .store_uint(op::excesses, 32);
         send_raw_message(msg.end_cell(), 64); 
         
         save_data();

@@ -275,5 +275,5 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 }
 
 (int) get_version() method_id {
-    return 3005;
+    return 2000;
 }
