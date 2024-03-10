@@ -114,6 +114,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     load_data();
 
     if (storage::init? == 0) {  ;; request jetton wallets' addresses after deploy
+        throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::admin_address));
         storage::init? = 1;
 
         builder tmp = begin_cell()
