@@ -22,8 +22,8 @@ const int exc::unsupported_op = 0xffff;
 
 {- GAS -}
 
-const int gas::deploy_pool           = 120000000;  ;; 0.11  TON
-const int gas::deploy_sharecoms      = 100000000;  ;; 0.10  TON
+const int gas::deploy_pool           = 120000000;  ;; 0.12  TON
+const int gas::deploy_sharecoms      = 95000000;   ;; 0.095  TON
 const int gas::notification          = 10000000;   ;; 0.01  TON
 const int gas::provide_addr          = 20000000;   ;; 0.02  TON
 const int gas::jetton_transfer       = 55000000;   ;; 0.055 TON

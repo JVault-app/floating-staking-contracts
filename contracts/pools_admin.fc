@@ -179,7 +179,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
             throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::jvt_wallet_address));
             if (jetton_amount < storage::creation_fee) {
                 send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, 64, 1,
-                            begin_cell().store_slice("Not enough JVT").end_cell());
+                            begin_cell().store_uint(0, 32).store_slice("Not enough JVT").end_cell());
                 return ();
             }
 
@@ -233,7 +233,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 
             if (jetton_amount < storage::change_content_fee) {
                 send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, 128, 1, 
-                             begin_cell().store_slice("Not enough JVT.").end_cell());
+                             begin_cell().store_uint(0, 32).store_slice("Not enough JVT.").end_cell());
                 return ();
             }
 

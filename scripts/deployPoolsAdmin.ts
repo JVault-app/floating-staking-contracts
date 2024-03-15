@@ -13,8 +13,8 @@ export async function run(provider: NetworkProvider) {
         stakingPoolCode: await compile("FloatingStakingCollection"),
         nftItemCode: await compile('NftItem'),
 
-        teamAddress: Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address,
-        conversionAddress: Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address,
+        teamAddress: Address.parse("0QAWES8quo0uywd5s5-542nlg0tvuVzG17tHHjg3tDjWYdpU") as Address,
+        conversionAddress: Address.parse("0QAWES8quo0uywd5s5-542nlg0tvuVzG17tHHjg3tDjWYdpU") as Address,
         host: "https://jvault.ru"
     }, await compile('PoolsAdmin')));
 

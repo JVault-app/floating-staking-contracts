@@ -170,7 +170,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
                    ((new_end_time == storage::end_time) | equal_slices(from_address, storage::creator_address))) {
                 ;; return jettons if sender is incorrect wallet address or new_end_time < now or someone (not admin) trying to change end_time
                 send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 1,
-                             begin_cell().store_slice("Can't add rewards").end_cell());  
+                             begin_cell().store_uint(0, 32).store_slice("Can't add rewards").end_cell());  
                 return ();
             }
 
@@ -186,7 +186,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
 
                 if ((new_farming_speed < storage::farming_speed) & (time_now < storage::end_time) & (storage::last_tvl > 0)) {  ;; it is impossible to decrease farming speed if staking hasn't ended
                     send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 1,
-                                 begin_cell().store_slice("Can't decrease farming speed").end_cell());
+                                 begin_cell().store_uint(0, 32).store_slice("Can't decrease farming speed").end_cell());
                     return ();
                 }
                 else {
@@ -217,7 +217,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
             ifnot ((equal_slices(sender_address, storage::lock_wallet_address) | (op == op::premint)) & (lock_period >= storage::min_lock_period) &
                    (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time) & (time_now + lock_period > 0xffffffff)) {  ;; check sender & staking conditions
                 send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 0, 
-                             begin_cell().store_slice("Can't stake").end_cell());
+                             begin_cell().store_uint(0, 32).store_slice("Can't stake").end_cell());
                 return ();
             } 
 
@@ -279,11 +279,11 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
 
         int user_rewards = muldiv(storage::distributed_rewards - nft_distributed_rewards, nft_locked_jettons, distributed_rewards_devider);
         send_jettons(query_id, user_rewards, from_address, from_address, storage::rewards_wallet_address, gas::jetton_transfer, 0, 1, 
-                     begin_cell().store_slice("Rewards claimed").end_cell());  ;; send rewards
+                     begin_cell().store_uint(0, 32).store_slice("Rewards claimed").end_cell());  ;; send rewards
 
         if ((op == op::withdraw_nft) & withdrawal_allowed) {
             send_jettons(query_id, nft_locked_jettons * withdrawal_allowed, from_address, from_address, storage::lock_wallet_address, gas::jetton_transfer, 0, 1, 
-                         begin_cell().store_slice("Jettons unstaked").end_cell());  ;; send withdrawed jettons
+                         begin_cell().store_uint(0, 32).store_slice("Jettons unstaked").end_cell());  ;; send withdrawed jettons
             storage::last_tvl -= nft_locked_jettons;
             from_address = burn_address;
         }
@@ -394,7 +394,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
         
         raw_reserve(gas::min_tons_for_storage, 0);
         send_jettons(query_id, jetton_amount, sender_address, sender_address, storage::rewards_wallet_address, 0, 128, 1,
-                     begin_cell().store_slice("Rewards withdrawed").end_cell());
+                     begin_cell().store_uint(0, 32).store_slice("Rewards withdrawed").end_cell());
         storage::rewards_balance -= jetton_amount;
         
         save_data();
@@ -421,7 +421,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
 
         raw_reserve(gas::min_tons_for_storage, 0);
         send_jettons(query_id, jetton_amount, sender_address, sender_address, jetton_to_withdraw, 0, 128, 1,
-                     begin_cell().store_slice("Accident jettons withdrawed").end_cell());
+                     begin_cell().store_uint(0, 32).store_slice("Accident jettons withdrawed").end_cell());
         return ();
     }
 
