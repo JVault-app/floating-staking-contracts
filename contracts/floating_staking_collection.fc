@@ -215,7 +215,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
             } 
 
             ifnot ((equal_slices(sender_address, storage::lock_wallet_address) | (op == op::premint)) & (lock_period >= storage::min_lock_period) &
-                   (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time) & (time_now + lock_period > 0xffffffff)) {  ;; check sender & staking conditions
+                   (transferred_jettons >= storage::minimum_deposit) & (time_now > storage::start_time) & (time_now < storage::end_time) & (time_now + lock_period < 0xffffffff)) {  ;; check sender & staking conditions
                 send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, 64, 0, 
                              begin_cell().store_uint(0, 32).store_slice("Can't stake").end_cell());
                 return ();
