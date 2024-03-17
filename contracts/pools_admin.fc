@@ -405,10 +405,6 @@ int get_creation_fee() method_id {
     return (storage::staking_pool_code, storage::nft_item_code, storage::sharecoms_code);
 }
 
-(cell) raw_get_data() method_id {
-    return get_data();
-}
-
 int get_version() method_id {
-    return 2000;
+    return 2002;
 }

@@ -484,10 +484,6 @@ cell get_nft_content(int index, cell individual_content) method_id {
     return storage::premint_open;
 }
 
-(cell) raw_get_data() method_id {
-    return get_data();
-}
-
 (int) get_version() method_id {
-    return 2005;
+    return 2002;
 }
