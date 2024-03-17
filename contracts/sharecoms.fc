@@ -8,6 +8,7 @@ global slice storage::pool_address;           ;; Address of the pool from which 
 global slice storage::pool_admin_address;     ;; Address of the pools admin that deployed this contract. (MsgAddress) 
 
 global int   storage::last_commission_time;   ;; Last commission artival time (max key in the commissions dict). (uint32)
+global int   storage::all_commissions;        ;; Amount of all collected commissions (Coins)
 
 global slice storage::jvt_staking_address;    ;; Address of the current JVT staking pool. (MsgAddress)
 global slice storage::jetton_wallet_address;  ;; Address of the jetton wallet in which commissions are stored. (MsgAddress)
@@ -26,7 +27,8 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
     if(ds.slice_bits() > 0) { 
         storage::init? = 1;
         storage::last_commission_time   = ds~load_uint(32);
-        
+        storage::all_commissions        = ds~load_coins();
+
         slice jettons = ds~load_ref().begin_parse();
         storage::jvt_staking_address    = jettons~load_msg_addr();
         storage::jetton_wallet_address  = jettons~load_msg_addr();
@@ -45,6 +47,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
             .store_slice(storage::pool_address)
             .store_slice(storage::pool_admin_address)
             .store_uint(storage::last_commission_time, 32)
+            .store_coins(storage::all_commissions)
             .store_ref(
                 begin_cell()
                     .store_slice(storage::jvt_staking_address)
@@ -94,7 +97,8 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
     total_commissions += muldiv(sharecoms_devider, commission_amount, jvt_pool_tvl);
     storage::commissions_dict~udict_set(32, commission_arrival_time, begin_cell().store_uint(total_commissions, 256).end_cell().begin_parse());
     storage::last_commission_time = commission_arrival_time;
-
+    storage::all_commissions += commission_amount;
+    
     save_data();
     return ();
 }
@@ -273,18 +277,18 @@ int get_claimable_commissions_by_time(int time, int staked_jvt) method_id {
     return muldiv(total_commissions - claimed_commissions, staked_jvt, sharecoms_devider);
 }
 
+(cell, cell) get_dicts() method_id {
+    load_data();
+    return (storage::nfts_dict, storage::commissions_dict);
+}
+
 (slice, slice, int, slice, slice, cell, cell, cell) get_storage_data() method_id {
     load_data();
     return (storage::pool_address, storage::pool_admin_address, storage::last_commission_time,
-             storage::jvt_staking_address, storage::jetton_wallet_address, storage::nft_item_code,
-             storage::nfts_dict, storage::commissions_dict);
+             storage::all_commissions, storage::jvt_staking_address, storage::jetton_wallet_address,
+             storage::nft_item_code, storage::nfts_dict, storage::commissions_dict);
 }
-
-cell raw_get_data() method_id {
-    return (get_data());
-}
-
 
 int get_version() method_id {
-    return 2000;
+    return 2002;
 }
