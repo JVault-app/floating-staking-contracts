@@ -121,6 +121,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
         throw_unless(405, equal_slices(sedner_address, storage::pool_admin_address));
         
         storage::last_commission_time   = 0;
+        storage::all_commissions        = 0;
         storage::jvt_staking_address    = in_msg_body~load_msg_addr();
         storage::jetton_wallet_address  = in_msg_body~load_msg_addr();
         storage::nft_item_code          = in_msg_body~load_ref();
