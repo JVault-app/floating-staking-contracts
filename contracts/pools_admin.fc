@@ -252,13 +252,13 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                                 .store_ref(
                                     begin_cell()
                                         .store_slice(storage::content_host.begin_parse())
-                                        .store_ref(collection_content_link)
+                                        .store_slice(collection_content_link)
                                     .end_cell()
                                 )
                                 .store_ref(
                                     begin_cell()
                                         .store_slice(storage::content_host.begin_parse())
-                                        .store_ref(nft_content_link)
+                                        .store_slice(nft_content_link)
                                     .end_cell()
                                 )
                                 .end_cell()
