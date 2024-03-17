@@ -160,7 +160,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
                          equal_slices(from_address, my_address()) & equal_slices(sedner_address, storage::jvt_staking_address));
 
             ;; load actual jvt staking TVL
-            report_data~skip_bits(65);
+            report_data~skip_bits(332);
             int  jvt_last_tvl           = report_data~load_coins();
             ;; load last commissions amount
             int commissions_amount      = payload~load_coins();
