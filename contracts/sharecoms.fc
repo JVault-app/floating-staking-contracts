@@ -282,7 +282,7 @@ int get_claimable_commissions_by_time(int time, int staked_jvt) method_id {
     return (storage::nfts_dict, storage::commissions_dict);
 }
 
-(slice, slice, int, slice, slice, cell, cell, cell) get_storage_data() method_id {
+(slice, slice, int, int, slice, slice, cell, cell, cell) get_storage_data() method_id {
     load_data();
     return (storage::pool_address, storage::pool_admin_address, storage::last_commission_time,
              storage::all_commissions, storage::jvt_staking_address, storage::jetton_wallet_address,
