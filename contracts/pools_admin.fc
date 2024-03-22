@@ -91,7 +91,7 @@ slice deploy_staking_pool(slice pool_content) impure inline {  ;; deploys new st
                                 .store_ref(pool_state_init)
                                 .store_ref(begin_cell().end_cell());
 
-    send_raw_message(pool_deploy_msg.end_cell(), 0);
+    send_raw_message(pool_deploy_msg.end_cell(), mode::simple);
 
     return pool_address;
 }
@@ -130,7 +130,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                                         .store_ref(sharecoms_state_init)
                                         .store_ref(sharecoms_init_body);
 
-    send_raw_message(sharecoms_deploy_msg.end_cell(), 0);  
+    send_raw_message(sharecoms_deploy_msg.end_cell(), mode::simple);  
 
     return sharecoms_address; 
 }
@@ -144,7 +144,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
             .store_uint(0, 32)
             .store_slice(comment);
-    send_raw_message(msg.end_cell(), 0);
+    send_raw_message(msg.end_cell(), mode::simple);
 }
 
 
@@ -175,10 +175,12 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         int   inner_op = payload~load_uint(32);
         
         if (inner_op == op::deploy_new_pool) {
-            throw_unless(exc::out_of_gas, msg_value > gas::deploy_pool + gas::deploy_sharecoms + gas::burn_jetton);
-            throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::jvt_wallet_address));
-            if (jetton_amount < storage::creation_fee) {
-                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, 64, 1,
+
+            if ((jetton_amount < storage::creation_fee) | 
+                (~ equal_slices(sender_address, storage::jvt_wallet_address)) | 
+                (msg_value < gas::deploy_pool + gas::deploy_sharecoms + gas::burn_jetton)) {
+
+                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_gas, 1,
                             begin_cell().store_uint(0, 32).store_slice("Not enough JVT").end_cell());
                 return ();
             }
@@ -188,13 +190,11 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
             slice pool_address = deploy_staking_pool(pool_content);
             slice sharecoms_address = deploy_sharecoms(rewards_jetton_address, pool_address);
 
-            burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, 0, 128);  ;; burn fees   
+            burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, 0, mode::carry_remaining_balance);  ;; burn fees   
             return ();
         }
         
         if (inner_op == op::send_commissions) {
-            throw_unless(exc::out_of_gas, msg_value > gas::jetton_transfer * 3 + gas::update_sharecoms);
-
             cell sharecoms_data = begin_cell()
                                         .store_slice(from_address)
                                         .store_slice(my_address())
@@ -215,11 +215,14 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
             
             slice excess_address = payload~load_msg_addr();
             ;; 10% for the team
-            send_jettons(query_id, muldiv(jetton_amount, 1, 10), storage::team_address, excess_address, sender_address, gas::jetton_transfer, 0, 1, null());
+            send_jettons(query_id, muldiv(jetton_amount, 1, 10), storage::team_address, excess_address, sender_address, gas::jetton_transfer, mode::simple, 
+                         1, begin_cell().store_uint(0, 32).store_slice("JVault team's part of commissions").end_cell());
             ;; 40% for conversion to JVT and burn
-            send_jettons(query_id, muldiv(jetton_amount, 4, 10), storage::conversion_address, excess_address, sender_address, gas::jetton_transfer, 0, 1, null());  
+            send_jettons(query_id, muldiv(jetton_amount, 4, 10), storage::conversion_address, excess_address, sender_address, gas::jetton_transfer, mode::simple,
+                         1, begin_cell().store_uint(0, 32).store_slice("Conversion to JVT part of commissions").end_cell());  
             ;; 50% for distribution above JVT stakers 
-            send_jettons(query_id, muldiv(jetton_amount, 5, 10), sharecoms_address, excess_address, sender_address, 0, 128, gas::update_sharecoms, null());
+            send_jettons(query_id, muldiv(jetton_amount, 5, 10), sharecoms_address, excess_address, sender_address, 0, mode::carry_remaining_balance,
+                         gas::update_sharecoms, begin_cell().store_uint(0, 32).store_slice("JVT stakers' part of commissions").end_cell());
 
             return ();
         }
@@ -228,16 +231,14 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
             slice pool_address            = payload~load_msg_addr();
             cell collection_content_link  = payload~load_ref();
             cell nft_content_link         = payload~load_ref();
-            
-            throw_unless(exc::incorrect_jetton, equal_slices(sender_address, storage::jvt_wallet_address));
 
-            if (jetton_amount < storage::change_content_fee) {
-                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, 128, 1, 
+            if ((jetton_amount < storage::change_content_fee) | (~ equal_slices(sender_address, storage::jvt_wallet_address))) {
+                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_balance, 1, 
                              begin_cell().store_uint(0, 32).store_slice("Not enough JVT.").end_cell());
                 return ();
             }
 
-            burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, gas::burn_jetton, 0);
+            burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, gas::burn_jetton, mode::simple);
 
             builder msg = begin_cell()
                             .store_uint(0x18, 6)
@@ -252,19 +253,19 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                                 .store_ref(
                                     begin_cell()
                                         .store_slice(storage::content_host.begin_parse())
-                                        .store_slice(collection_content_link)
+                                        .store_slice(collection_content_link.begin_parse())
                                     .end_cell()
                                 )
                                 .store_ref(
                                     begin_cell()
                                         .store_slice(storage::content_host.begin_parse())
-                                        .store_slice(nft_content_link)
+                                        .store_slice(nft_content_link.begin_parse())
                                     .end_cell()
                                 )
                                 .end_cell()
                             );
             
-            send_raw_message(msg.end_cell(), 128);
+            send_raw_message(msg.end_cell(), mode::carry_remaining_balance);
 
             return ();
         }
@@ -280,7 +281,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         throw_unless(exc::out_of_gas, msg_value > gas::jetton_transfer);
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         int jetton_amount = in_msg_body~load_coins();
-        send_jettons(query_id, jetton_amount, storage::team_address, storage::team_address, jetton_wallet_address, 0, 64, 1, null());
+        send_jettons(query_id, jetton_amount, storage::team_address, storage::team_address, jetton_wallet_address, 0, mode::carry_remaining_gas, 1, null());
         return ();
     }
 
@@ -292,12 +293,12 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                         .store_slice(storage::team_address)
                         .store_coins(msg_value)
                         .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
-        send_raw_message(msg.end_cell(), 128); 
+        send_raw_message(msg.end_cell(), mode::carry_remaining_balance); 
         return ();
     }
     
     if (op == 5) {  ;; send any message
-        send_raw_message(in_msg_body~load_ref(), 64);
+        send_raw_message(in_msg_body~load_ref(), mode::carry_remaining_gas);
         return ();
     }
 

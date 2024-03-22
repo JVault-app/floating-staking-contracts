@@ -83,7 +83,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
     int total_commissions  = commision_dict_value~load_uint(256);
 
     int nft_share = muldiv(total_commissions - claimed_commissions, staked_jvt, sharecoms_devider);
-    send_jettons(query_id, nft_share, nft_owner_address, nft_owner_address, storage::jetton_wallet_address, 0, 64, 1, null());
+    send_jettons(query_id, nft_share, nft_owner_address, nft_owner_address, storage::jetton_wallet_address, 0, mode::carry_remaining_gas, 1, null());
 
     storage::nfts_dict~udict_set(256, user_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
 
@@ -113,12 +113,12 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
         return ();
     }
 
-    slice sedner_address = cs~load_msg_addr();
+    slice sender_address = cs~load_msg_addr();
 
     load_data();
 
     if (storage::init? == 0) {
-        throw_unless(405, equal_slices(sedner_address, storage::pool_admin_address));
+        throw_unless(405, equal_slices(sender_address, storage::pool_admin_address));
         
         storage::last_commission_time   = 0;
         storage::all_commissions        = 0;
@@ -138,7 +138,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
                                     .store_uint(now(), 64)
                                     .store_slice(my_address())
                                     .store_uint(0, 1);
-        send_raw_message(get_wallet_msg.end_cell(), 1);  ;; request jetton wallet address after deploy
+        send_raw_message(get_wallet_msg.end_cell(), mode::pay_fees_separately);  ;; request jetton wallet address after deploy
         
         save_data();
         return ();
@@ -157,7 +157,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
 
         if (inner_op == op::update_sharecoms) {
             throw_unless(exc::incorrect_sender, 
-                         equal_slices(from_address, my_address()) & equal_slices(sedner_address, storage::jvt_staking_address));
+                         equal_slices(from_address, my_address()) & equal_slices(sender_address, storage::jvt_staking_address));
 
             ;; load actual jvt staking TVL
             report_data~skip_bits(332);
@@ -175,7 +175,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
                             .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                             .store_uint(op::excesses, 32)
                             .store_uint(query_id, 64);
-            send_raw_message(msg.end_cell(), 64); 
+            send_raw_message(msg.end_cell(), mode::carry_remaining_gas); 
 
             return ();
         }
@@ -197,19 +197,24 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
             
             ;; check that nft is from the JVT staking collection
             slice expected_nft_address = calculate_nft_address_by_index(storage::jvt_staking_address, storage::nft_item_code, nft_collection_index);
-            throw_unless(exc::incorrect_sender, equal_slices(sedner_address, expected_nft_address)); 
+            throw_unless(exc::incorrect_sender, equal_slices(sender_address, expected_nft_address)); 
             throw_unless(exc::nft_burned, nft_is_active);
 
-            claim_commissions(sedner_address, nft_owner_address, query_id, nft_start_time, nft_locked_value);
+            claim_commissions(sender_address, nft_owner_address, query_id, nft_start_time, nft_locked_value);
 
             return();
         }
     }
 
     if (op == op::transfer_notification) {
-        throw_unless(exc::incorrect_jetton, equal_slices(sedner_address, storage::jetton_wallet_address));
-
         int commission_amount = in_msg_body~load_coins();
+        slice from_address = in_msg_body~load_msg_addr();
+
+        ifnot(equal_slices(sender_address, storage::jetton_wallet_address) & (msg_value >= gas::update_sharecoms)) {
+            send_jettons(query_id, commission_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_gas, 0, null());
+            return ();
+        }
+
         builder msg = begin_cell()
                         .store_uint(0x18, 6)
                         .store_slice(storage::jvt_staking_address)
@@ -224,22 +229,42 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
                                 .store_coins(commission_amount)
                             .end_cell()
                         );
-        send_raw_message(msg.end_cell(), 64);
+        send_raw_message(msg.end_cell(), mode::carry_remaining_gas);
     
         return();
     }
 
     if (op == op::take_wallet_address) {  ;; change jetton wallet address (used only once)
-        throw_unless(exc::incorrect_sender, equal_slices(storage::jetton_wallet_address, sedner_address));
+        throw_unless(exc::incorrect_sender, 
+                     equal_slices(storage::jetton_wallet_address, sender_address) | equal_slices(storage::pool_admin_address, sender_address));
         storage::jetton_wallet_address = in_msg_body~load_msg_addr();
 
         save_data();
         return ();
     }
 
-    if (op == 15) {
-        storage::jvt_staking_address = in_msg_body~load_msg_addr();
-        save_data();
+    if (op == 3) {  ;; withdraw jetton
+        throw_unless(exc::out_of_gas, msg_value >= gas::jetton_transfer);
+        throw_unless(exc::incorrect_sender, equal_slices(storage::pool_admin_address, sender_address));
+
+        slice jetton_wallet_address = in_msg_body~load_msg_addr();
+        int jetton_amount = in_msg_body~load_coins();
+        throw_if(exc::incorrect_jetton, equal_slices(storage::jetton_wallet_address, jetton_wallet_address));
+
+        send_jettons(query_id, jetton_amount, storage::pool_admin_address, storage::pool_admin_address, jetton_wallet_address, 0, mode::carry_remaining_gas, 1, null());
+        return ();
+    }
+
+    if (op == 4) {  ;; withdraw ton
+        throw_unless(exc::incorrect_sender, equal_slices(storage::pool_admin_address, sender_address));
+        raw_reserve(gas::min_tons_for_storage, 0);
+
+        builder msg = begin_cell()
+                        .store_uint(0x10, 6)
+                        .store_slice(storage::pool_admin_address)
+                        .store_coins(msg_value)
+                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+        send_raw_message(msg.end_cell(), mode::carry_remaining_balance); 
         return ();
     }
 

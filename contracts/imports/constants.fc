@@ -83,6 +83,18 @@ const int op::update_sharecoms     = 0xc482170f;
 const int op::claim_commissions    = 0xbca8f067;
 
 
+{- MESSAGE MODES -}
+
+const int mode::simple                  = 0;
+const int mode::carry_remaining_gas     = 64;
+const int mode::carry_remaining_balance = 128;
+
+const int mode::pay_fees_separately     = 1;
+const int mode::ignore_errors           = 2;
+const int mode::bounce_on_fail          = 16;
+const int mode::selfdestruct_on_empty   = 32;
+
+
 {- OTHER -}
 
 const int commission_devider = 100000;

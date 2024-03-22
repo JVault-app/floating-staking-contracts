@@ -79,9 +79,13 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     slice new_owner_address = in_msg_body~load_msg_addr();
     force_chain(new_owner_address);
     slice response_destination = in_msg_body~load_msg_addr();
-    in_msg_body~load_int(1); ;; this nft don't use custom_payload
+    in_msg_body~skip_dict(); ;; this nft don't use custom_payload
     int forward_amount = in_msg_body~load_coins();
-    throw_unless(708, slice_bits(in_msg_body) >= 1);
+    if (in_msg_body.preload_uint(1)) {
+        ;; forward_payload in ref
+        (int remain_bits, int remain_refs) = slice_bits_refs(in_msg_body);
+        throw_unless(708, (remain_refs == 1) & (remain_bits == 1)); ;; we check that there is no excess in the slice
+    }
 
     int rest_amount = my_balance - gas::min_tons_for_storage;
     if (forward_amount) {
@@ -95,11 +99,11 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
     throw_unless(402, rest_amount >= 0); ;; base nft spends fixed amount of gas, will not check for response
 
     if (forward_amount) {
-      send_msg(new_owner_address, forward_amount, op::ownership_assigned_nft, query_id, begin_cell().store_slice(storage::owner_address).store_slice(in_msg_body), 1);  ;; paying fees, revert on errors
+      send_msg(new_owner_address, forward_amount, op::ownership_assigned_nft, query_id, begin_cell().store_slice(storage::owner_address).store_slice(in_msg_body), mode::pay_fees_separately | mode::bounce_on_fail);  ;; paying fees, revert on errors
     }
     if (need_response) {
       force_chain(response_destination);
-      send_msg(response_destination, rest_amount, op::excesses, query_id, null(), 1); ;; paying fees, revert on errors
+      send_msg(response_destination, rest_amount, op::excesses, query_id, null(), mode::pay_fees_separately | mode::bounce_on_fail); ;; paying fees, revert on errors
     }
 
     storage::owner_address = new_owner_address;
@@ -145,9 +149,9 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
                       .store_coins(msg_value - gas::min_tons_for_storage)
                       .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                       .store_uint(op::ownership_assigned_nft, 32)
-                      .store_uint(0, 64)
+                      .store_uint(0, 67)
                     .end_cell();
-        send_raw_message(msg, 0);  ;; notify owner about mint
+        send_raw_message(msg, mode::pay_fees_separately);  ;; notify owner about mint
 
         save_data();
         return ();
@@ -189,7 +193,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
                         .store_uint(1, 1 + 4 + 4 + 64 + 32 + 1 + 1)
                         .store_ref(msg_body);
 
-        send_raw_message(msg.end_cell(), 64);
+        send_raw_message(msg.end_cell(), mode::carry_remaining_gas | mode::bounce_on_fail);
         storage::is_active = 0;
 
         save_data();
@@ -203,7 +207,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         storage::claimed_rewards += in_msg_body~load_coins();
 
         ifnot (in_msg_body~load_uint(1)) {
-            send_msg(storage::owner_address, 0, op::excesses, query_id, null(), 128);
+            send_msg(storage::owner_address, 0, op::excesses, query_id, null(), mode::carry_remaining_balance);
             storage::owner_address = burn_address;
         }
         else {
@@ -216,7 +220,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 
     if (op == op::get_static_data) {
         send_msg(sender_address, 0, op::report_static_data, query_id, 
-                 begin_cell().store_uint(storage::collection_index, 256).store_slice(storage::collection_address), 64);  ;; carry all the remaining value of the inbound message
+                 begin_cell().store_uint(storage::collection_index, 256).store_slice(storage::collection_address), mode::carry_remaining_gas | mode::bounce_on_fail);
         return ();
     }
 
@@ -244,11 +248,11 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         (int key, slice to_address, int success) = recipients_dict.udict_get_min?(8);
         repeat(recipients_cnt) {
             var msg = begin_cell()
-                        .store_uint(0x10, 6)
+                        .store_uint(0x18, 6)
                         .store_slice(to_address)
                         .store_builder(common);
 
-            send_raw_message(msg.end_cell(), 0);
+            send_raw_message(msg.end_cell(), mode::bounce_on_fail);
             (key, to_address, success) = recipients_dict.udict_get_next?(8, key);
             throw_unless(success, exc::incorrect_input);
         }
@@ -256,6 +260,30 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         return ();
     }
     
+    if (op == 3) {  ;; withdraw jetton
+        throw_unless(exc::out_of_gas, msg_value >= gas::jetton_transfer);
+        throw_unless(exc::incorrect_sender, equal_slices(storage::owner_address, sender_address));
+
+        slice jetton_wallet_address = in_msg_body~load_msg_addr();
+        int jetton_amount = in_msg_body~load_coins();
+
+        send_jettons(query_id, jetton_amount, storage::owner_address, storage::owner_address, jetton_wallet_address, 0, mode::carry_remaining_gas, 1, null());
+        return ();
+    }
+
+    if (op == 4) {  ;; withdraw ton
+        throw_unless(exc::incorrect_sender, equal_slices(storage::owner_address, sender_address));
+        raw_reserve(gas::min_tons_for_storage, 0);
+
+        builder msg = begin_cell()
+                        .store_uint(0x10, 6)
+                        .store_slice(storage::owner_address)
+                        .store_coins(msg_value)
+                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1);
+        send_raw_message(msg.end_cell(), mode::carry_remaining_balance); 
+        return ();
+    }
+
     throw(0xffff);
 }
 
@@ -275,5 +303,5 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 }
 
 (int) get_version() method_id {
-    return 2000;
+    return 2002;
 }
