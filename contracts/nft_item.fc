@@ -151,7 +151,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
                       .store_uint(op::ownership_assigned_nft, 32)
                       .store_uint(0, 67)
                     .end_cell();
-        send_raw_message(msg, mode::pay_fees_separately);  ;; notify owner about mint
+        send_raw_message(msg, mode::simple);  ;; notify owner about mint
 
         save_data();
         return ();
