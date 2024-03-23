@@ -242,7 +242,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
                      equal_slices(storage::jetton_wallet_address, sender_address) | equal_slices(storage::pool_admin_address, sender_address));
         storage::jetton_wallet_address = in_msg_body~load_msg_addr();
         storage::jetton_wallet_set = 1;
-        
+
         save_data();
         return ();
     }
@@ -312,11 +312,11 @@ int get_claimable_commissions_by_time(int time, int staked_jvt) method_id {
     return (storage::nfts_dict, storage::commissions_dict);
 }
 
-(slice, slice, int, int, slice, slice, cell, cell, cell) get_storage_data() method_id {
+(slice, slice, int, int, slice, slice, int, cell, cell, cell) get_storage_data() method_id {
     load_data();
     return (storage::pool_address, storage::pool_admin_address, storage::last_commission_time,
              storage::all_commissions, storage::jvt_staking_address, storage::jetton_wallet_address,
-             storage::nft_item_code, storage::nfts_dict, storage::commissions_dict);
+             storage::jetton_wallet_set, storage::nft_item_code, storage::nfts_dict, storage::commissions_dict);
 }
 
 int get_version() method_id {
