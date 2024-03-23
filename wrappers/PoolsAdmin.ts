@@ -14,6 +14,7 @@ export type PoolsAdminConfig = {
     conversionAddress: Address;
     
     host: string;
+    jvtNftCode: Cell;
 };
 
 export function poolsAdminConfigToCell(config: PoolsAdminConfig): Cell {
@@ -37,6 +38,7 @@ export function poolsAdminConfigToCell(config: PoolsAdminConfig): Cell {
                         .storeStringTail(config.host)
                         .endCell()
                     )
+                    .storeRef(config.jvtNftCode)
                     .endCell()
                 )
             

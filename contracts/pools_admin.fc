@@ -16,7 +16,8 @@ global cell  storage::nft_item_code;        ;; Code of the Bond NFT item (nft_it
 global slice storage::team_address;         ;; Address of the main project wallet. (MsgAddress)
 global slice storage::conversion_address;   ;; Address of the wallet from which commissions are being converting to JVT. (MsgAddress) 
 
-global cell storage::content_host;          ;; Prefix of link to NFT collections' content
+global cell storage::content_host;          ;; Prefix of link to NFT collections' content. (Cell)
+global cell storage::jvt_nft_code;          ;; Code of the jvt staking Bond NFT smart-contract. (Cell)
 
 
 () load_data() impure inline {
@@ -35,6 +36,7 @@ global cell storage::content_host;          ;; Prefix of link to NFT collections
     storage::team_address        = ds~load_msg_addr();
     storage::conversion_address  = ds~load_msg_addr(); 
     storage::content_host        = ds~load_ref();
+    storage::jvt_nft_code        = ds~load_ref();
 }
 
 
@@ -55,6 +57,7 @@ global cell storage::content_host;          ;; Prefix of link to NFT collections
                     .store_slice(storage::team_address)
                     .store_slice(storage::conversion_address)
                     .store_ref(storage::content_host)
+                    .store_ref(storage::jvt_nft_code)
                 .end_cell()
             )
         .end_cell()
@@ -153,7 +156,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
     cell sharecoms_init_body = begin_cell()
                                     .store_slice(storage::jvt_staking_address)
                                     .store_slice(rewards_jetton_address)
-                                    .store_ref(storage::nft_item_code)
+                                    .store_ref(storage::jvt_nft_code)
                                 .end_cell();
 
     builder sharecoms_deploy_msg = begin_cell()
