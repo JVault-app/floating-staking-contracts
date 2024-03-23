@@ -62,6 +62,40 @@ global cell storage::content_host;          ;; Prefix of link to NFT collections
 }
 
 
+int check_pool_content(slice pool_content) { ;; returns -1 if the pool content is correct, otherwise returns 0
+    try {
+        cell collection_content    = pool_content~load_ref();
+
+        int last_tvl               = pool_content~load_coins();
+        int distributed_rewards    = pool_content~load_uint(256);
+
+        int min_lock_period        = pool_content~load_uint(32);
+        int farming_speed          = pool_content~load_coins();
+
+        int rewards_balance        = pool_content~load_coins();
+        int commission_factor      = pool_content~load_uint(16);
+
+        int wallet_lock_changed    = pool_content~load_uint(1);
+        int wallet_rewards_changed = pool_content~load_uint(1);
+        int premint_open           = pool_content~load_uint(1);
+
+        pool_content = pool_content~load_ref().begin_parse();
+        int start_time             = pool_content~load_uint(32);
+        int end_time               = pool_content~load_uint(32);
+        int minimum_deposit        = pool_content~load_coins();
+
+        slice lock_wallet_address    = pool_content~load_msg_addr();
+        slice rewards_wallet_address = pool_content~load_msg_addr();
+        slice creator_address        = pool_content~load_msg_addr();
+        pool_content.end_parse();
+        
+        return ((last_tvl | distributed_rewards | farming_speed | rewards_balance | wallet_lock_changed | wallet_rewards_changed) == 0);
+    } catch (_, _) {
+        return 0;
+    }
+}
+
+
 slice deploy_staking_pool(slice pool_content) impure inline {  ;; deploys new staking pool contract and returns its address
     cell pool_data = begin_cell()
                         .store_uint(0, 65)
@@ -170,15 +204,24 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
 
         int   jetton_amount = in_msg_body~load_coins();
         slice from_address  = in_msg_body~load_msg_addr();
-        slice payload       = in_msg_body~load_ref().begin_parse();
+
+        slice payload = in_msg_body~load_uint(1) ? in_msg_body~load_ref().begin_parse() : in_msg_body;
+
+        (int bits, int refs) = payload.slice_bits_refs();
+        if (bits != 32 + 267) { ;; inner_op + address
+            send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_gas,
+                         1, begin_cell().store_uint(0, 32).store_slice("Incorrect payload").end_cell());  
+            return ();
+        }
 
         int   inner_op = payload~load_uint(32);
         
         if (inner_op == op::deploy_new_pool) {
-
+            
             if ((jetton_amount < storage::creation_fee) | 
                 (~ equal_slices(sender_address, storage::jvt_wallet_address)) | 
-                (msg_value < gas::deploy_pool + gas::deploy_sharecoms + gas::burn_jetton)) {
+                (msg_value < gas::deploy_pool + gas::deploy_sharecoms + gas::burn_jetton) |
+                (refs != 1)) {
 
                 send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_gas, 1,
                             begin_cell().store_uint(0, 32).store_slice("Not enough JVT").end_cell());
@@ -186,6 +229,11 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
             }
 
             slice pool_content = payload~load_ref().begin_parse();   ;; user-created content of the new staking pool
+            ifnot (check_pool_content(pool_content)) {
+                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_gas, 1,
+                            begin_cell().store_uint(0, 32).store_slice("Incorrect pool content").end_cell());
+                return ();
+            }
             slice rewards_jetton_address = payload~load_msg_addr();  ;; address of rewards jetton of the new staking pool
             slice pool_address = deploy_staking_pool(pool_content);
             slice sharecoms_address = deploy_sharecoms(rewards_jetton_address, pool_address);
@@ -228,15 +276,16 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         }
 
         if(inner_op == op::change_collection_content) {
+
+            if ((jetton_amount < storage::change_content_fee) | (~ equal_slices(sender_address, storage::jvt_wallet_address)) | (refs != 2)) {
+                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_balance,
+                             1, begin_cell().store_uint(0, 32).store_slice("Not enough JVT.").end_cell());
+                return ();
+            }
+
             slice pool_address            = payload~load_msg_addr();
             cell collection_content_link  = payload~load_ref();
             cell nft_content_link         = payload~load_ref();
-
-            if ((jetton_amount < storage::change_content_fee) | (~ equal_slices(sender_address, storage::jvt_wallet_address))) {
-                send_jettons(query_id, jetton_amount, from_address, from_address, sender_address, 0, mode::carry_remaining_balance, 1, 
-                             begin_cell().store_uint(0, 32).store_slice("Not enough JVT.").end_cell());
-                return ();
-            }
 
             burn_jettons(query_id, jetton_amount, storage::jvt_wallet_address, from_address, gas::burn_jetton, mode::simple);
 
