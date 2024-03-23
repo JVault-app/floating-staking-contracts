@@ -12,6 +12,7 @@ global int   storage::all_commissions;        ;; Amount of all collected commiss
 
 global slice storage::jvt_staking_address;    ;; Address of the current JVT staking pool. (MsgAddress)
 global slice storage::jetton_wallet_address;  ;; Address of the jetton wallet in which commissions are stored. (MsgAddress)
+global int storage::jetton_wallet_set;        ;; Was jetton wallet set? (Uint1)
 
 global cell  storage::nft_item_code;          ;; Code of JVT Bond NFTs. (Cell)
 global cell  storage::nfts_dict;              ;; Key = nft address (uint256); value = last claimed commission arrival time (uint32). (HashMapE)
@@ -32,6 +33,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
         slice jettons = ds~load_ref().begin_parse();
         storage::jvt_staking_address    = jettons~load_msg_addr();
         storage::jetton_wallet_address  = jettons~load_msg_addr();
+        storage::jetton_wallet_set  = jettons~load_uint(1);
 
         storage::nft_item_code          = ds~load_ref();
 
@@ -52,6 +54,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
                 begin_cell()
                     .store_slice(storage::jvt_staking_address)
                     .store_slice(storage::jetton_wallet_address)
+                    .store_uint(storage::jetton_wallet_set, 1)
                 .end_cell()
             )
             .store_ref(storage::nft_item_code)
@@ -234,11 +237,12 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
         return();
     }
 
-    if (op == op::take_wallet_address) {  ;; change jetton wallet address (used only once)
+    if ((op == op::take_wallet_address) & (storage::jetton_wallet_set == 0)) {  ;; change jetton wallet address (used only once)
         throw_unless(exc::incorrect_sender, 
                      equal_slices(storage::jetton_wallet_address, sender_address) | equal_slices(storage::pool_admin_address, sender_address));
         storage::jetton_wallet_address = in_msg_body~load_msg_addr();
-
+        storage::jetton_wallet_set = 1;
+        
         save_data();
         return ();
     }
