@@ -4,30 +4,30 @@
 #include "imports/utils.fc";
 
 
-global int storage::init?;                    ;; is collection initialized? (uint1)
-global int storage::next_item_index;          ;; next item index (uint32)
-global int storage::last_update_time;         ;; time of the last update (uint32)
+global int storage::init?;                     ;; is collection initialized? (uint1)
+global int storage::next_item_index;           ;; next item index (uint32)
+global int storage::last_update_time;          ;; time of the last update (uint32)
 
-global cell storage::nft_item_code;           ;; NFT code (Cell)
-global cell storage::collection_content;      ;; collection content (Cell)
+global cell storage::nft_item_code;            ;; NFT code (Cell)
+global cell storage::collection_content;       ;; collection content (Cell)
 
-global int storage::last_tvl;                 ;; current TVL (coins)
-global int storage::distributed_rewards;      ;; amount of rewards currently distributed among stakers (per `distributed_rewards_devider` jettons)
+global int storage::last_tvl;                  ;; current TVL (coins)
+global int storage::distributed_rewards;       ;; amount of rewards currently distributed among stakers (per `distributed_rewards_devider` jettons)
 
-global int storage::min_lock_period;          ;; minimum lock period in seconds (uint32)
-global int storage::farming_speed;            ;; current farming speed (Coins)
+global int storage::min_lock_period;           ;; minimum lock period in seconds (uint32)
+global int storage::farming_speed;             ;; current farming speed (Coins)
 
 global slice storage::rewards_wallet_address;  ;; address of jetton wallet for rewards jettons (MsgAddress)
-global int storage::rewards_balance;          ;; total rewards (Coins)
-global int storage::commission_factor;        ;; uint16. commission rate = commission_factor / commission_devider
+global int storage::rewards_balance;           ;; total rewards (Coins)
+global int storage::commission_factor;         ;; uint16. commission rate = commission_factor / commission_devider
 
-global int storage::wallet_lock_changed;      ;; is lock wallet initialized? (uint1)
-global int storage::wallet_rewards_changed;   ;; is rewards wallet initialized? (uint1)
-global int storage::premint_open;             ;; is premint open? always zero for normal pools (uint1)
+global int storage::lock_wallet_set;           ;; was lock wallet set? (uint1)
+global int storage::rewards_wallet_set;        ;; was rewards wallet initialized? (uint1)
+global int storage::premint_open;              ;; is premint open? always zero for usual pools (uint1)
 
-global int storage::start_time;               ;; timestamp of the start of the staking program (uint32)
-global int storage::end_time;                 ;; timestamp of the end of the staking program (uint32)
-global int storage::minimum_deposit;          ;; minimum deposit (Coins)
+global int storage::start_time;                ;; timestamp of the start of the staking program (uint32)
+global int storage::end_time;                  ;; timestamp of the end of the staking program (uint32)
+global int storage::minimum_deposit;           ;; minimum deposit (Coins)
 
 global slice storage::lock_wallet_address;     ;; address of jetton wallet for locked jettons (MsgAddress)
 global slice storage::admin_address;           ;; admin address (MsgAddress)
@@ -54,8 +54,8 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     storage::rewards_balance        = ds~load_coins();
     storage::commission_factor      = ds~load_uint(16);
 
-    storage::wallet_lock_changed    = ds~load_uint(1);
-    storage::wallet_rewards_changed = ds~load_uint(1);
+    storage::lock_wallet_set    = ds~load_uint(1);
+    storage::rewards_wallet_set = ds~load_uint(1);
     storage::premint_open           = ds~load_uint(1);
 
     ds = ds~load_ref().begin_parse();
@@ -84,8 +84,8 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
         .store_coins(storage::farming_speed)
         .store_coins(storage::rewards_balance)
         .store_uint(storage::commission_factor, 16)
-        .store_uint(storage::wallet_lock_changed, 1)
-        .store_uint(storage::wallet_rewards_changed, 1)
+        .store_uint(storage::lock_wallet_set, 1)
+        .store_uint(storage::rewards_wallet_set, 1)
         .store_uint(storage::premint_open, 1)
         .store_ref(
             begin_cell()
@@ -146,13 +146,23 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     if  ((op == op::transfer_notification) | (op == op::premint)) {
         int transferred_jettons = in_msg_body~load_coins();
         slice from_address = in_msg_body~load_msg_addr();
+
+        if (in_msg_body~load_uint(1)) {
+            in_msg_body = in_msg_body~load_ref().begin_parse();
+        }
+        if (in_msg_body.slice_bits() < 32) {
+            send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, mode::carry_remaining_gas,
+                         1, begin_cell().store_uint(0, 32).store_slice("Incorrect payload").end_cell());  
+            return ();
+        }
+
         int lock_period = in_msg_body~load_uint(32);
         
         int time_now = now();
 
         if (lock_period == 0xffffffff) {  ;; add rewards
             int new_end_time = storage::end_time;
-            ifnot (slice_empty?(in_msg_body)) {
+            if (in_msg_body.slice_bits() >= 32) {
                 new_end_time = in_msg_body~load_uint(32);  ;; admin can set new end time
             }
 
@@ -298,14 +308,14 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     if (op == op::take_wallet_address) {  ;; change jetton wallet address (used only once)
         slice reported_wallet_address = in_msg_body~load_msg_addr();
         if ((equal_slices(sender_address, storage::lock_wallet_address) | equal_slices(sender_address, storage::creator_address)) &
-             (storage::wallet_lock_changed == 0)) {
+             (storage::lock_wallet_set == 0)) {
             storage::lock_wallet_address = reported_wallet_address;
-            storage::wallet_lock_changed = 1;
+            storage::lock_wallet_set = 1;
         }
         if ((equal_slices(sender_address, storage::rewards_wallet_address) | equal_slices(sender_address, storage::creator_address)) & 
-            (storage::wallet_rewards_changed == 0)) {
+            (storage::rewards_wallet_set == 0)) {
             storage::rewards_wallet_address = reported_wallet_address;
-            storage::wallet_rewards_changed = 1;
+            storage::rewards_wallet_set = 1;
         }
         
         save_data();
