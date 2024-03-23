@@ -17,6 +17,7 @@ const int exc::already_withdrawed = 53;
 const int exc::nothing_to_claim = 54;
 const int exc::int_out_of_range = 55;
 const int exc::nft_burned = 56;
+const int exc::hashmap_overflow = 57;
 const int exc::unsupported_op = 0xffff;
 
 

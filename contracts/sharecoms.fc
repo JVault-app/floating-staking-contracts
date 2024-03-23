@@ -16,6 +16,7 @@ global int storage::jetton_wallet_set;        ;; Was jetton wallet set? (Uint1)
 
 global cell  storage::nft_item_code;          ;; Code of JVT Bond NFTs. (Cell)
 global cell  storage::nfts_dict;              ;; Key = nft address (uint256); value = last claimed commission arrival time (uint32). (HashMapE)
+global int   storage::nfts_dict_size;         ;; Size of nfts_dict. (uint16)
 global cell  storage::commissions_dict;       ;; Key = commission arrival time (uint32); value = amount of claimable commissions per `sharecoms_devider` staked JVT (uint256). First element is (0: 0). (HashMapE)
 
 
@@ -37,7 +38,8 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
 
         storage::nft_item_code          = ds~load_ref();
 
-        storage::nfts_dict             = ds~load_dict();
+        storage::nfts_dict               = ds~load_dict();
+        storage::nfts_dict_size          = ds~load_uint(16);
         storage::commissions_dict        = ds~load_dict();
     } 
 }
@@ -59,6 +61,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
             )
             .store_ref(storage::nft_item_code)
             .store_dict(storage::nfts_dict)
+            .store_uint(storage::nfts_dict_size, 16)
             .store_dict(storage::commissions_dict)
         .end_cell()
     );
@@ -66,16 +69,18 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
 
 
 () claim_commissions(slice nft_address, slice nft_owner_address, int query_id, int time_nft, int staked_jvt) impure inline {
-    (int wc, int user_id) = parse_std_addr(nft_address);
+    (int wc, int nft_id) = parse_std_addr(nft_address);
     throw_unless(333, wc == 0);
 
-    (slice nfts_dict_value, int success) = storage::nfts_dict.udict_get?(256, user_id);
+    (slice nfts_dict_value, int success) = storage::nfts_dict.udict_get?(256, nft_id);
     int last_claimed_commission_time = 0;
     if (success){
         last_claimed_commission_time = nfts_dict_value~load_uint(32);
     }
     else { 
         (last_claimed_commission_time, _, _) = storage::commissions_dict.udict_get_prev?(32, time_nft);
+        storage::nfts_dict_size += 1;
+        throw_if(exc::hashmap_overflow, storage::nfts_dict_size > 30000);
     }
     throw_unless(exc::nothing_to_claim, last_claimed_commission_time < storage::last_commission_time);
 
@@ -86,9 +91,10 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
     int total_commissions  = commision_dict_value~load_uint(256);
 
     int nft_share = muldiv(total_commissions - claimed_commissions, staked_jvt, sharecoms_devider);
-    send_jettons(query_id, nft_share, nft_owner_address, nft_owner_address, storage::jetton_wallet_address, 0, mode::carry_remaining_gas, 1, null());
+    send_jettons(query_id, nft_share, nft_owner_address, nft_owner_address, storage::jetton_wallet_address, 0, mode::carry_remaining_gas,
+                 1, begin_cell().store_uint(0, 32).store_slice("Commission claimed").end_cell());
 
-    storage::nfts_dict~udict_set(256, user_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
+    storage::nfts_dict~udict_set(256, nft_id, begin_cell().store_uint(storage::last_commission_time, 32).end_cell().begin_parse());
 
     save_data();
     return ();
@@ -127,8 +133,10 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
         storage::all_commissions        = 0;
         storage::jvt_staking_address    = in_msg_body~load_msg_addr();
         storage::jetton_wallet_address  = in_msg_body~load_msg_addr();
+        storage::jetton_wallet_set      = 0;
         storage::nft_item_code          = in_msg_body~load_ref();
         storage::nfts_dict              = new_dict();
+        storage::nfts_dict_size         = 0;
         storage::commissions_dict       = new_dict();
         storage::commissions_dict~udict_set(32, 0, begin_cell().store_uint(0, 256).end_cell().begin_parse());
 
@@ -253,7 +261,7 @@ global cell  storage::commissions_dict;       ;; Key = commission arrival time (
 
         slice jetton_wallet_address = in_msg_body~load_msg_addr();
         int jetton_amount = in_msg_body~load_coins();
-        throw_if(exc::incorrect_jetton, equal_slices(storage::jetton_wallet_address, jetton_wallet_address));
+        throw_if(exc::incorrect_jetton, equal_slices(storage::jetton_wallet_address, jetton_wallet_address) & (storage::nfts_dict_size < 30000));
 
         send_jettons(query_id, jetton_amount, storage::pool_admin_address, storage::pool_admin_address, jetton_wallet_address, 0, mode::carry_remaining_gas, 1, null());
         return ();
@@ -289,9 +297,9 @@ int get_commissions_per_devider() method_id {
     return commision_dict_value~load_uint(256);
 }
 
-int get_last_claimed_commission_time(int user_id) method_id {
+int get_last_claimed_commission_time(int nft_id) method_id {
     load_data();
-    (slice dict_value, int success) = storage::nfts_dict.udict_get?(256, user_id);
+    (slice dict_value, int success) = storage::nfts_dict.udict_get?(256, nft_id);
     return (success ? dict_value~load_uint(32) : 0);
 }
 
@@ -312,11 +320,11 @@ int get_claimable_commissions_by_time(int time, int staked_jvt) method_id {
     return (storage::nfts_dict, storage::commissions_dict);
 }
 
-(slice, slice, int, int, slice, slice, int, cell, cell, cell) get_storage_data() method_id {
+(slice, slice, int, int, slice, slice, int, cell, cell, int, cell) get_storage_data() method_id {
     load_data();
-    return (storage::pool_address, storage::pool_admin_address, storage::last_commission_time,
-             storage::all_commissions, storage::jvt_staking_address, storage::jetton_wallet_address,
-             storage::jetton_wallet_set, storage::nft_item_code, storage::nfts_dict, storage::commissions_dict);
+    return (storage::pool_address, storage::pool_admin_address, storage::last_commission_time, storage::all_commissions,
+             storage::jvt_staking_address, storage::jetton_wallet_address, storage::jetton_wallet_set, 
+             storage::nft_item_code, storage::nfts_dict, storage::nfts_dict_size, storage::commissions_dict);
 }
 
 int get_version() method_id {
