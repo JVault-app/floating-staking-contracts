@@ -125,6 +125,14 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
             storage::is_active = 1;
             save_data();
         }
+        else {
+            int op = in_msg_body~load_uint(32);
+            int query_id = in_msg_body~load_uint(64);
+            if (op == op::report_storage_data) {
+                slice from_address = in_msg_body~load_msg_addr();
+                send_msg(from_address, 0, op::excesses, query_id, null(), 64);
+            }
+        }
         return ();
     }
 

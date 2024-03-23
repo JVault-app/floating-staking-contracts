@@ -68,7 +68,10 @@ slice calculate_nft_address_by_index(slice collection_address, cell nft_item_cod
 
     ifnot(null?(forward_payload)) {
         msg_body = msg_body.store_dict(forward_payload);
-    }          
+    }
+    else {
+        msg_body = msg_body.store_uint(0, 1);
+    }
 
     builder msg = begin_cell()
                 .store_uint(0x10, 6) 
