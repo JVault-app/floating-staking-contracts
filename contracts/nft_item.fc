@@ -132,6 +132,9 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
                 slice from_address = in_msg_body~load_msg_addr();
                 send_msg(from_address, 0, op::excesses, query_id, null(), 64);
             }
+            else {
+                send_msg(storage::owner_address, 0, op::excesses, query_id, null(), 64);
+            }
         }
         return ();
     }
