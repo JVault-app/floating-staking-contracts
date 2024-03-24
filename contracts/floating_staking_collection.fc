@@ -4,34 +4,34 @@
 #include "imports/utils.fc";
 
 
-global int storage::init?;                     ;; is collection initialized? (uint1)
-global int storage::next_item_index;           ;; next item index (uint32)
-global int storage::last_update_time;          ;; time of the last update (uint32)
+global int storage::init?;                     ;; Is collection initialized? (uint1)
+global int storage::next_item_index;           ;; Next item index (uint32)
+global int storage::last_update_time;          ;; Time of the last update (uint32)
 
 global cell storage::nft_item_code;            ;; NFT code (Cell)
-global cell storage::collection_content;       ;; collection content (Cell)
+global cell storage::collection_content;       ;; Collection content (Cell)
 
-global int storage::last_tvl;                  ;; current TVL (coins)
-global int storage::distributed_rewards;       ;; amount of rewards currently distributed among stakers (per `distributed_rewards_devider` jettons)
+global int storage::last_tvl;                  ;; Current TVL (coins)
+global int storage::distributed_rewards;       ;; Amount of rewards currently distributed among stakers (per `distributed_rewards_devider` jettons)
 
-global int storage::min_lock_period;           ;; minimum lock period in seconds (uint32)
-global int storage::farming_speed;             ;; current farming speed (Coins)
+global int storage::min_lock_period;           ;; Minimum lock period in seconds (uint32)
+global int storage::farming_speed;             ;; Current farming speed (Coins)
 
-global slice storage::rewards_wallet_address;  ;; address of jetton wallet for rewards jettons (MsgAddress)
-global int storage::rewards_balance;           ;; total rewards (Coins)
-global int storage::commission_factor;         ;; uint16. commission rate = commission_factor / commission_devider
+global slice storage::rewards_wallet_address;  ;; Address of jetton wallet for rewards jettons (MsgAddress)
+global int storage::rewards_balance;           ;; Total rewards (Coins)
+global int storage::commission_factor;         ;; Commission rate = commission_factor / commission_devider (uint16)
 
-global int storage::lock_wallet_set;           ;; was lock wallet set? (uint1)
-global int storage::rewards_wallet_set;        ;; was rewards wallet initialized? (uint1)
-global int storage::premint_open;              ;; is premint open? always zero for usual pools (uint1)
+global int storage::lock_wallet_set;           ;; Was lock wallet set? (uint1)
+global int storage::rewards_wallet_set;        ;; Was rewards wallet initialized? (uint1)
+global int storage::premint_open;              ;; Is premint open? always zero for usual pools (uint1)
 
-global int storage::start_time;                ;; timestamp of the start of the staking program (uint32)
-global int storage::end_time;                  ;; timestamp of the end of the staking program (uint32)
-global int storage::minimum_deposit;           ;; minimum deposit (Coins)
+global int storage::start_time;                ;; Timestamp of the start of the staking program (uint32)
+global int storage::end_time;                  ;; Timestamp of the end of the staking program (uint32)
+global int storage::minimum_deposit;           ;; Minimum deposit (Coins)
 
-global slice storage::lock_wallet_address;     ;; address of jetton wallet for locked jettons (MsgAddress)
-global slice storage::admin_address;           ;; admin address (MsgAddress)
-global slice storage::creator_address;         ;; creator address (MsgAddress)
+global slice storage::lock_wallet_address;     ;; Address of jetton wallet for locked jettons (MsgAddress)
+global slice storage::admin_address;           ;; Admin address (MsgAddress)
+global slice storage::creator_address;         ;; Creator address (MsgAddress)
 
 
 () load_data() impure inline {
@@ -54,8 +54,8 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     storage::rewards_balance        = ds~load_coins();
     storage::commission_factor      = ds~load_uint(16);
 
-    storage::lock_wallet_set    = ds~load_uint(1);
-    storage::rewards_wallet_set = ds~load_uint(1);
+    storage::lock_wallet_set        = ds~load_uint(1);
+    storage::rewards_wallet_set     = ds~load_uint(1);
     storage::premint_open           = ds~load_uint(1);
 
     ds = ds~load_ref().begin_parse();
@@ -143,7 +143,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
     int op = in_msg_body~load_uint(32);
     int query_id = in_msg_body~load_uint(64);
 
-    if  ((op == op::transfer_notification) | (op == op::premint)) {
+    if  (op == op::transfer_notification) {
         int transferred_jettons = in_msg_body~load_coins();
         slice from_address = in_msg_body~load_msg_addr();
 
@@ -157,7 +157,6 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
         }
 
         int lock_period = in_msg_body~load_uint(32);
-        
         int time_now = now();
 
         if (lock_period == 0xffffffff) {  ;; add rewards
@@ -204,7 +203,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
                          gas::receive_commissions, begin_cell().store_uint(op::send_commissions, 32).store_slice(from_address).end_cell());
         }
         else {  ;; stake jettons
-            ifnot ((equal_slices(sender_address, storage::lock_wallet_address) | (op == op::premint)) &
+            ifnot (equal_slices(sender_address, storage::lock_wallet_address) &
                   (lock_period >= storage::min_lock_period) & (transferred_jettons >= storage::minimum_deposit) & 
                    (time_now > storage::start_time) & (time_now < storage::end_time) & 
                    (time_now + lock_period < 0xffffffff) & (msg_value >= gas::stake)) {  ;; check sender & staking conditions
@@ -214,15 +213,8 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
                 return ();
             } 
 
-            int withdrawal_allowed = 1;  ;; not allowed for preminted NFTs
             int nft_transfer_allowed = 1;  ;; will new NFT allow transfers?
-            if (op == op::premint) {
-                throw_unless(exc::premint_closed, (storage::premint_open == 1));
-                throw_unless(exc::incorrect_sender, equal_slices(sender_address, storage::creator_address));
-                withdrawal_allowed = 0;
-                nft_transfer_allowed = 0;
-            }
-            elseif (in_msg_body.slice_bits() > 0) {
+            if (in_msg_body.slice_bits() > 0) {
                 nft_transfer_allowed = in_msg_body~load_uint(1);
             }
 
@@ -242,7 +234,7 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
                                     .store_uint(time_now + lock_period, 32)
                                     .store_coins(transferred_jettons)
                                     .store_uint(nft_transfer_allowed, 1)
-                                    .store_uint(withdrawal_allowed, 1)
+                                    .store_uint(1, 1)
                                     .store_uint(storage::distributed_rewards, 256)
                                 .end_cell();
             deploy_nft_item(storage::next_item_index, storage::nft_item_code, nft_content, my_address());  ;; deploy bond NFT
@@ -274,31 +266,31 @@ global slice storage::creator_address;         ;; creator address (MsgAddress)
                      1, begin_cell().store_uint(0, 32).store_slice("Rewards claimed").end_cell());  ;; send rewards
 
         if ((op == op::withdraw_nft) & withdrawal_allowed) {
-            send_jettons(query_id, nft_locked_jettons * withdrawal_allowed, from_address, from_address, storage::lock_wallet_address, gas::jetton_transfer, mode::simple, 
+            send_jettons(query_id, nft_locked_jettons, from_address, from_address, storage::lock_wallet_address, gas::jetton_transfer, mode::simple, 
                          1, begin_cell().store_uint(0, 32).store_slice("Jettons unstaked").end_cell());  ;; send withdrawed jettons
             storage::last_tvl -= nft_locked_jettons;
             from_address = burn_address;
         }
-        else {
-            builder change_nft_state_msg = begin_cell()
-                                            .store_uint(0x18, 6)
-                                            .store_slice(sender_address)
-                                            .store_coins(gas::change_state_nft)
-                                            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
-                                            .store_uint(1, 1)
-                                            .store_ref(
-                                                begin_cell()
-                                                    .store_uint(op::change_state_nft, 32)
-                                                    .store_uint(query_id, 64)
-                                                    .store_uint(storage::distributed_rewards, 256)
-                                                    .store_coins(user_rewards)
-                                                    .store_int((op == op::withdraw_nft), 1)  ;; ((op == op::withdraw_nft) ? 1 : 0)
-                                                .end_cell()
-                                            );
-            send_raw_message(change_nft_state_msg.end_cell(), mode::simple);
-            
-            send_msg(from_address, 0, op::excesses, query_id, null(), mode::carry_remaining_balance);  ;; change NFT state description
-        }
+
+        builder change_nft_state_msg = begin_cell()
+                                        .store_uint(0x18, 6)
+                                        .store_slice(sender_address)
+                                        .store_coins(gas::change_state_nft)
+                                        .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1)
+                                        .store_uint(1, 1)
+                                        .store_ref(
+                                            begin_cell()
+                                                .store_uint(op::change_state_nft, 32)
+                                                .store_uint(query_id, 64)
+                                                .store_uint(storage::distributed_rewards, 256)
+                                                .store_coins(user_rewards)
+                                                .store_int((op == op::withdraw_nft), 1)  ;; ((op == op::withdraw_nft) ? 1 : 0)
+                                            .end_cell()
+                                        );
+        send_raw_message(change_nft_state_msg.end_cell(), mode::simple);
+        
+        send_msg(from_address, 0, op::excesses, query_id, null(), mode::carry_remaining_balance);  ;; change NFT state description
+        
         storage::last_update_time = time_now;
         
         save_data();

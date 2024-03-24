@@ -365,6 +365,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
         storage::staking_pool_code = in_msg_body~load_ref();
         storage::nft_item_code = in_msg_body~load_ref();
         storage::sharecoms_code = in_msg_body~load_ref();
+        storage::jvt_nft_code = in_msg_body~load_ref();
         save_data();
         notify_owner("Smc code was changed");
         return ();
