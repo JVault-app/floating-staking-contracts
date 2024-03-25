@@ -269,9 +269,7 @@ global slice storage::creator_address;         ;; Creator address (MsgAddress)
             send_jettons(query_id, nft_locked_jettons, from_address, from_address, storage::lock_wallet_address, gas::jetton_transfer, mode::simple, 
                          1, begin_cell().store_uint(0, 32).store_slice("Jettons unstaked").end_cell());  ;; send withdrawed jettons
             storage::last_tvl -= nft_locked_jettons;
-            from_address = burn_address;
         }
-
         builder change_nft_state_msg = begin_cell()
                                         .store_uint(0x18, 6)
                                         .store_slice(sender_address)
@@ -287,9 +285,9 @@ global slice storage::creator_address;         ;; Creator address (MsgAddress)
                                                 .store_int((op == op::withdraw_nft), 1)  ;; ((op == op::withdraw_nft) ? 1 : 0)
                                             .end_cell()
                                         );
-        send_raw_message(change_nft_state_msg.end_cell(), mode::simple);
+        send_raw_message(change_nft_state_msg.end_cell(), mode::simple);  ;; change NFT state
         
-        send_msg(from_address, 0, op::excesses, query_id, null(), mode::carry_remaining_balance);  ;; change NFT state description
+        send_msg(from_address, 0, op::excesses, query_id, null(), mode::carry_remaining_balance);
         
         storage::last_update_time = time_now;
         

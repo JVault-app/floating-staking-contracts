@@ -126,15 +126,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
             save_data();
         }
         else {
-            int op = in_msg_body~load_uint(32);
-            int query_id = in_msg_body~load_uint(64);
-            if (op == op::report_storage_data) {
-                slice from_address = in_msg_body~load_msg_addr();
-                send_msg(from_address, 0, op::excesses, query_id, null(), 64);
-            }
-            else {
-                send_msg(storage::owner_address, 0, op::excesses, query_id, null(), 64);
-            }
+            send_msg(storage::owner_address, 0, op::excesses, 0, null(), 64);
         }
         return ();
     }
@@ -217,7 +209,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         storage::distributed_rewards = in_msg_body~load_uint(256);
         storage::claimed_rewards += in_msg_body~load_coins();
 
-        ifnot (in_msg_body~load_uint(1)) {
+        if (in_msg_body~load_uint(1)) {
             send_msg(storage::owner_address, 0, op::excesses, query_id, null(), mode::carry_remaining_balance);
             storage::owner_address = burn_address;
         }
