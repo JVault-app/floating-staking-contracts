@@ -82,15 +82,17 @@ int check_pool_content(slice pool_content) { ;; returns -1 if the pool content i
         int wallet_rewards_changed = pool_content~load_uint(1);
         int premint_open           = pool_content~load_uint(1);
 
-        pool_content = pool_content~load_ref().begin_parse();
-        int start_time             = pool_content~load_uint(32);
-        int end_time               = pool_content~load_uint(32);
-        int minimum_deposit        = pool_content~load_coins();
+        slice pool_content_2       = pool_content~load_ref().begin_parse();
+        int start_time             = pool_content_2~load_uint(32);
+        int end_time               = pool_content_2~load_uint(32);
+        int minimum_deposit        = pool_content_2~load_coins();
 
-        slice lock_wallet_address    = pool_content~load_msg_addr();
-        slice rewards_wallet_address = pool_content~load_msg_addr();
-        slice creator_address        = pool_content~load_msg_addr();
+        slice lock_wallet_address    = pool_content_2~load_msg_addr();
+        slice rewards_wallet_address = pool_content_2~load_msg_addr();
+        slice creator_address        = pool_content_2~load_msg_addr();
+
         pool_content.end_parse();
+        pool_content_2.end_parse();
         
         return ((last_tvl | distributed_rewards | farming_speed | rewards_balance | wallet_lock_changed | wallet_rewards_changed) == 0);
     } catch (_, _) {
@@ -454,9 +456,9 @@ int get_creation_fee() method_id {
     return (storage::team_address, storage::conversion_address);
 }
 
-(cell, cell, cell) get_codes() method_id {
+(cell, cell, cell, cell) get_codes() method_id {
     load_data();
-    return (storage::staking_pool_code, storage::nft_item_code, storage::sharecoms_code);
+    return (storage::staking_pool_code, storage::nft_item_code, storage::sharecoms_code, storage::jvt_nft_code);
 }
 
 int get_version() method_id {

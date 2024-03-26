@@ -125,9 +125,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
             storage::is_active = 1;
             save_data();
         }
-        else {
-            send_msg(storage::owner_address, 0, op::excesses, 0, null(), 64);
-        }
+        send_msg(storage::owner_address, 0, op::excesses, 0, null(), mode::carry_remaining_gas);
         return ();
     }
 
@@ -210,7 +208,13 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         storage::claimed_rewards += in_msg_body~load_coins();
 
         if (in_msg_body~load_uint(1)) {
-            send_msg(storage::owner_address, 0, op::excesses, query_id, null(), mode::carry_remaining_balance);
+            builder msg = begin_cell()
+                            .store_uint(0x10, 6) 
+                            .store_slice(storage::owner_address)
+                            .store_coins(0)
+                            .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 32)
+                            .store_slice("NFT burned");
+            send_raw_message(msg.end_cell(), mode::carry_remaining_balance);
             storage::owner_address = burn_address;
         }
         else {
@@ -257,7 +261,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 
             send_raw_message(msg.end_cell(), mode::bounce_on_fail);
             (key, to_address, success) = recipients_dict.udict_get_next?(8, key);
-            throw_unless(success, exc::incorrect_input);
+            throw_unless(exc::incorrect_input, success);
         }
 
         return ();
@@ -294,8 +298,8 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 ;; GET methods
 
 (int, int, slice, slice, cell) get_nft_data() method_id {
-  load_data();
-  return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address, begin_cell().end_cell());
+    load_data();
+    return (storage::init?, storage::collection_index, storage::collection_address, storage::owner_address, begin_cell().end_cell());
 }
 
 (int, int, slice, slice, int, int, int, int, int, int, int) get_storage_data() method_id {

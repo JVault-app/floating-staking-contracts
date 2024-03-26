@@ -428,9 +428,9 @@ global slice storage::creator_address;         ;; Creator address (MsgAddress)
 ;; GET methods
 
 (int, cell, slice) get_collection_data() method_id {
-  load_data();
-  slice cs = storage::collection_content.begin_parse();
-  return (storage::next_item_index, cs~load_ref(), burn_address);
+    load_data();
+    slice cs = storage::collection_content.begin_parse();
+    return (storage::next_item_index, cs~load_ref(), burn_address);
 }
 
 slice get_nft_address_by_index(int index) method_id {
@@ -466,13 +466,22 @@ cell get_nft_content(int index, cell individual_content) method_id {
     return (0, 100, my_address());
 }
 
-(int, slice, cell, cell, int, int, int, int, int, int, int, int, int, slice, slice, slice, int, int, int) get_staking_data() method_id {
+(int) get_nft_rewards(int nft_locked_jettons, int nft_distributed_rewards) method_id {
+    load_data();
+    int time_now = min(now(), storage::end_time);
+    int cur_distributed_rewards = storage::distributed_rewards + muldiv((time_now - storage::last_update_time) * storage::farming_speed, distributed_rewards_devider, (farming_speed_devider * storage::last_tvl));
+
+    int user_rewards = muldiv(cur_distributed_rewards - nft_distributed_rewards, nft_locked_jettons, distributed_rewards_devider);
+    return user_rewards;
+}
+
+(int, int, int, cell, cell, int, int, int, int, slice, int, int, int, int, int, int, int, int, slice, slice, slice) get_storage_data() method_id {
     load_data();
     
-    return (storage::init?, storage::admin_address, storage::collection_content, storage::nft_item_code, storage::next_item_index,
-            storage::start_time, storage::end_time, storage::minimum_deposit, storage::min_lock_period, storage::farming_speed, 
-            storage::rewards_balance, storage::commission_factor, 0, storage::creator_address, storage::lock_wallet_address,
-            storage::rewards_wallet_address, storage::last_tvl, storage::distributed_rewards, storage::last_update_time);
+    return (storage::init?, storage::next_item_index, storage::last_update_time, storage::nft_item_code, storage::collection_content, 
+            storage::last_tvl, storage::distributed_rewards, storage::min_lock_period, storage::farming_speed, storage::rewards_wallet_address, 
+            storage::rewards_balance, storage::commission_factor, storage::lock_wallet_set, storage::rewards_wallet_set, storage::premint_open, 
+            storage::start_time, storage::end_time, storage::minimum_deposit, storage::lock_wallet_address, storage::admin_address, storage::creator_address);
 }
 
 (int) get_premint_status() method_id {
