@@ -254,6 +254,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
                             
         (int key, slice to_address, int success) = recipients_dict.udict_get_min?(8);
         repeat(recipients_cnt) {
+            throw_unless(exc::incorrect_input, success);
             var msg = begin_cell()
                         .store_uint(0x18, 6)
                         .store_slice(to_address)
@@ -261,7 +262,6 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
 
             send_raw_message(msg.end_cell(), mode::bounce_on_fail);
             (key, to_address, success) = recipients_dict.udict_get_next?(8, key);
-            throw_unless(exc::incorrect_input, success);
         }
 
         return ();
