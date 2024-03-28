@@ -235,7 +235,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
         int recipients_cnt = in_msg_body~load_uint(8);  ;; number of recipients
         throw_unless(exc::int_out_of_range, recipients_cnt <= 128);  ;; can send only 128 messages due to gas limits
 
-        int computing_fees = recipients_cnt * 5400000 + 10000000;  ;; estimate gas consumed during the compute phase
+        int computing_fees = recipients_cnt * 2000000 + 10000000;  ;; estimate gas consumed during the compute phase
         int tons_for_one_msg = (msg_value - computing_fees) / recipients_cnt; 
         throw_unless(exc::out_of_gas, tons_for_one_msg > gas::notification * 2); 
 
@@ -252,8 +252,9 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
                             .store_ref(get_data())
                             .store_ref(forward_payload);  ;; common part of all messages
                             
-        (int key, slice to_address, int success) = recipients_dict.udict_get_min?(8);
+        int key = 0;
         repeat(recipients_cnt) {
+            (slice to_address, int success) = recipients_dict.udict_get?(8, key);
             throw_unless(exc::incorrect_input, success);
             var msg = begin_cell()
                         .store_uint(0x18, 6)
@@ -261,7 +262,7 @@ global int storage::distributed_rewards;       ;; rewards that were distributed 
                         .store_builder(common);
 
             send_raw_message(msg.end_cell(), mode::bounce_on_fail);
-            (key, to_address, success) = recipients_dict.udict_get_next?(8, key);
+            key += 1;
         }
 
         return ();
