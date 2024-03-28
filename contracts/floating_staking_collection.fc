@@ -429,10 +429,6 @@ global slice storage::creator_address;         ;; Creator address (MsgAddress)
         int recipients_cnt = in_msg_body~load_uint(8);  ;; number of recipients
         throw_unless(exc::int_out_of_range, recipients_cnt <= 128);  ;; can send only 128 messages due to gas limits
 
-        ;; int computing_fees = recipients_cnt * 5400000 + 10000000;  ;; estimate gas consumed during the compute phase
-        ;; int tons_for_one_msg = (msg_value - computing_fees) / recipients_cnt; 
-        ;; throw_unless(exc::out_of_gas, tons_for_one_msg > gas::NFT * 2); 
-
         cell recipients_dict = in_msg_body~load_dict();
         
         int key = 0;
