@@ -1,4 +1,4 @@
-import { toNano } from '@ton/core';
+import { Address, Slice, toNano, Cell, beginCell } from '@ton/core';
 import { FloatingStaking } from '../wrappers/FloatingStakingCollection';
 import { compile, NetworkProvider } from '@ton/blueprint';
 
@@ -6,8 +6,35 @@ export async function run(provider: NetworkProvider) {
     const floatingStaking = provider.open(
         FloatingStaking.createFromConfig(
             {
-                id: Math.floor(Math.random() * 10000),
-                counter: 0,
+                init: 1n, 
+                next_item_index: 1n,
+                last_update_time: 0n,
+                admin_address: Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address,
+
+                nft_item_code: await compile('NftItem'),
+                collection_content: Cell.fromBase64("te6ccgEBAwEAagACAAECAFxodHRwczovL2p2YXVsdC5hcHAvY29sbGVjdGlvbl9jb250ZW50P25hbWU9SlZUAGhodHRwczovL2p2YXVsdC5hcHAvbmZ0X2NvbnRlbnQ/Y29sbGVjdGlvbj1KVlQmaW5kZXg9"),
+
+                last_tvl: 0n,
+                distributed_rewards: 0n, 
+
+                min_lock_period: 0n,
+                farming_speed: 0n, 
+
+                rewards_balance: 0n, 
+                commission_factor: 0n, 
+
+                lock_wallet_set        : 0n,
+                rewards_wallet_set     : 0n,
+                premint_open           : 0n,
+
+                start_time             : 0n,
+                end_time               : 0n,
+                minimum_deposit        : 0n,
+
+                lock_wallet_address    : Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address,
+                rewards_wallet_address : Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address,
+                creator_address        : Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address
+
             },
             await compile('FloatingStakingCollection')
         )
