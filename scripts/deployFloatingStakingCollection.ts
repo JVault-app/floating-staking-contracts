@@ -6,7 +6,7 @@ export async function run(provider: NetworkProvider) {
     const floatingStaking = provider.open(
         FloatingStaking.createFromConfig(
             {
-                init: 1n, 
+                init: 0n, 
                 next_item_index: 321n,
                 last_update_time: 1711634270n,
                 admin_address: Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address,
@@ -18,7 +18,7 @@ export async function run(provider: NetworkProvider) {
                 distributed_rewards: 20185462348121548244921499133n, 
 
                 min_lock_period: 0n,
-                farming_speed: 0n, 
+                farming_speed: 342398080795n, 
 
                 rewards_balance: 250000000999938n, 
                 commission_factor: 0n, 
@@ -31,8 +31,8 @@ export async function run(provider: NetworkProvider) {
                 end_time               : 1770336000n,
                 minimum_deposit        : 20000000000n,
 
-                lock_wallet_address    : Address.parse("EQC8FoZMlBcZhZ6Pr9sHGyHzkFv9y2B5X9tN61RvucLRzFZz") as Address,
-                rewards_wallet_address : Address.parse("EQC8FoZMlBcZhZ6Pr9sHGyHzkFv9y2B5X9tN61RvucLRzFZz") as Address,
+                lock_wallet_address    : Address.parse("kQCWhleSppv-HQc2gxSO_H6QCvg5AGcR-rk2nvP3ywpgIkQK") as Address,
+                rewards_wallet_address : Address.parse("kQCWhleSppv-HQc2gxSO_H6QCvg5AGcR-rk2nvP3ywpgIkQK") as Address,
                 creator_address        : Address.parse("0QCWVqwkomdw-o4wsVqdBO_HHkv584nZw0ziJUVgeUWG6MkO") as Address
 
             },
