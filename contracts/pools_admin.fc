@@ -169,7 +169,7 @@ slice deploy_sharecoms(slice rewards_jetton_address, slice pool_address) impure 
                                         .store_ref(sharecoms_state_init)
                                         .store_ref(sharecoms_init_body);
 
-    send_raw_me ssage(sharecoms_deploy_msg.end_cell(), mode::simple);  
+    send_raw_message(sharecoms_deploy_msg.end_cell(), mode::simple);  
 
     return sharecoms_address; 
 }
