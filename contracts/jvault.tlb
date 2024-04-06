@@ -1,0 +1,171 @@
+nothing$_ {X: Type} = Optional X;
+something$_ {X: Type} value:X = Optional X;
+
+jetton_transfer_notification#7362d09c {Payload: Type}
+    query_id:uint64
+    amount:Coins
+    sender:MsgAddress
+    forward_payload:(Either Payload ^Payload)
+= JettonTransferNotification Payload;
+
+// Деплой нового стейкинг-пула с плавающей доходностью
+// приходит на адрес pool_admin (EQDA7BVEzqUv3gQ95_5mGrMx1frr7lPDbNHzopzvm03uG3dL) от jvt_wallet_address
+// Если действие успешное, то деплоится новый контракт стейкинг-пула, а пришедшие жетоны сжигаются
+// иначе, пришедшие жетоны отправляются обратно юзеру или происходит ошибка недостаточного газа
+floating_staking_content$_
+     collection_content:^Cell
+     last_tvl:Coins
+     distributed_rewards:uint256
+     min_lock_period:uint32
+     farming_speed:Coins
+     rewards_balance:Coins
+     commission_factor:uint16
+     wallet_lock_changed:Bool
+     wallet_rewards_changed:Bool
+     premint_open:Bool
+     ^[
+        start_time:uint32
+        end_time:uint32
+        minimum_deposit:Coins
+        lock_wallet_address:MsgAddress
+        rewards_wallet_address:MsgAddress
+        creator_address:MsgAddress
+     ]
+ = FloatingPoolContent;
+
+deploy_floating_payload#da861f17
+    rewards_jetton_address:MsgAddress
+    user_pool_content:FloatingPoolContent
+ = DeployFloatingPayload;
+
+deploy_floating_request$_ _:(JettonTransferNotification DeployFloatingPayload) = InMsgBody;
+
+// Деплой нового стейкинг-пула с фиксированной доходностью
+// приходит на адрес pool_admin (EQAYdwUqXy2jlQU6ATs1J2TsnCDZGq-vDXB6wZeYrSBe5DBU) от jvt_wallet_address
+// Если действие успешное, то деплоится новый контракт стейкинг-пула, а пришедшие жетоны сжигаются
+// иначе, пришедшие жетоны отправляются обратно юзеру
+fixed_staking_content$_
+     collection_content:^Cell
+     rewards_wallet_address:MsgAddress
+     staking_params:(HashmapE 32 64)
+     minimum_deposit:Coins
+     commission_factor:uint16
+     rewards_balance:Coins
+     last_tvl:Coins
+     lock_wallet_set:Bool
+     rewards_wallet_set:Bool
+     ^[
+        lock_wallet_address:MsgAddress
+        creator_address:MsgAddress
+     ]
+ = FixedPoolContent;
+
+deploy_fixed_payload#da861f17
+    rewards_jetton_address:MsgAddress
+    pool_content:FixedPoolContent
+ = DeployFixedPayload;
+
+deploy_fixed_request$_ _:(JettonTransferNotification DeployFixedPayload) = InMsgBody;
+
+// Деплой контракта sharecoms (происходит одновременно с деплоем стейкинг-пула),
+// сообщение отправляет pool_admin
+deploy_sharecoms_message$_
+    jvt_staking_address:MsgAddress
+    rewards_jetton_address:MsgAddress
+    jvt_bond_nft_code:^Cell
+ = InMsgBody;
+
+// Добавление наград в стейкинг-пуле (приходит на адрес стейкинг-пула от rewards_wallet_address).
+// Если действие успешное, то некоторый процент от комиссий отправляется на адрес pool_admin
+// иначе, жетоны отправляются обратно юзеру.
+
+// new_end_time используется для изменения времени окончания стейкинга для пулов с плавающей доходностью
+add_rewards_payload#ffffffff new_end_time:(Optional uint32) = RewardsArrivalPayload;
+add_rewards_message$_ _:(JettonTransferNotification RewardsArrivalPayload) = InMsgBody;
+
+// Приход новых комиссий на адрес pool_admin
+// Если действие успешное (всегда, если соответствует TL-B схеме и достаточно газа), то комиссии пересылаются дальше по трем адресам в разных пропорциях
+commission_arrival_payload#b96adaea excess_address:MsgAddress = CommissionArrivalPayload;
+commission_arrival_message$_ _:(JettonTransferNotification CommissionArrivalPayload) = InMsgBody;
+
+// Отправка токенов на стейкинг (приходит на адрес стейкинг-пула от lock_wallet_address)
+// Если действие успешное, то деплоится Bond NFT
+// иначе, жетоны отправляются обратно юзеру
+stake_tokens_payload$_ lock_period:uint32 nft_transfer_allowed:(Optional Bool) = StakeTokensPayload;
+stake_tokens_message$_ _:(JettonTransferNotification StakeTokensPayload) = InMsgBody;
+
+// Деплой новой Bond NFT (отправляется стейкинг-пулом при стейкинге)
+// В пуле с floating. доходностью:
+deploy_floating_nft_message$_
+    nft_item_index:uint64
+    owner_address:MsgAddress
+    start_time:uint32
+    unlock_time:uint32
+    locked_value:Coins
+    is_transferrable:Bool
+    withdrawal_allowed:Bool
+    distributed_rewards:uint256
+ = InMsgBody;
+// В пуле с фикс. доходностью:
+deploy_fixed_nft_message$_
+    nft_item_index:uint64
+    owner_address:MsgAddress
+    start_time:uint32
+    unlock_time:uint32
+    staking_factor:uint64
+    locked_value:Coins
+    is_transferrable:Bool
+    withdrawal_allowed:Bool
+ = InMsgBody;
+
+// Клейм наград со стейкинга (приходит на адрес стейкинг-пула от Bond NFT)
+// Если действие успешное, то пользователю отправляются награды
+// иначе, смарт-контракт выдает ошибку
+claim_staking_rewards_message#a769de27
+    item_index:uint32
+    from_address:MsgAddress
+    nft_locked_jettons:Coins
+    nft_distributed_rewards:uint256
+    withdrawal_allowed:Bool
+= InMsgBody;
+
+// Анстейкинг (приходит на адрес стейкинг-пула от Bond NFT)
+// Если действие успешное, то пользователю отправляются застейканные монеты и награды
+// иначе, смарт-контракт выдает ошибку
+unstake_message#b5de5f9e
+    item_index:uint32
+    from_address:MsgAddress
+    nft_locked_jettons:Coins
+    nft_distributed_rewards:uint256
+    withdrawal_allowed:Bool
+= InMsgBody;
+
+// Изменение данных нфт после клейма/анстейка (отправляется стейкинг-пулом на адрес Bond NFT)
+// с плавающей доходностью:
+change_floating_nft_state_message#dca3da4c
+    query_id:uint64
+    distributed_rewards:uint256
+    claimed_rewards:Coins
+    need_deactivate:Bool
+= InMsgBody;
+// с фикс. доходностью:
+change_fixed_nft_state_message#dca3da4c
+   query_id:uint64
+   claimed_rewards:Coins
+   need_deactivate:Bool
+= InMsgBody;
+
+// Запрос данных NFT или стейкинг-пула
+request_data_message#5b88e5cc
+    query_id:uint64
+    to_address:MsgAddress
+ = InMsgBody;
+
+report_data_message#aab4a8ef
+    query_id:uint64
+    requester_addres:MsgAddress
+    report_time:uint32
+    report_data:^Cell
+    request_msg_body:Cell
+= InMsgBody;
+
