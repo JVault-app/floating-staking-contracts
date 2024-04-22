@@ -184,18 +184,11 @@ global slice storage::creator_address;         ;; Creator address (MsgAddress)
 
                 int new_farming_speed = (storage::last_tvl != 0) ? muldiv(storage::rewards_balance, farming_speed_devider, (new_end_time - time_now)) : 0;
 
-                if ((new_farming_speed < storage::farming_speed) & (time_now < storage::end_time) & (storage::last_tvl > 0)) {  ;; it is impossible to decrease farming speed if staking hasn't ended
-                    send_jettons(query_id, transferred_jettons, from_address, from_address, sender_address, 0, mode::carry_remaining_gas,
-                                 1, begin_cell().store_uint(0, 32).store_slice("Can't decrease farming speed").end_cell());
-                    return ();
+                if ((storage::last_tvl > 0) & (time_now < storage::end_time)) {
+                    storage::distributed_rewards += muldiv((time_now - storage::last_update_time) * storage::farming_speed, distributed_rewards_devider, (farming_speed_devider * storage::last_tvl));
                 }
-                else {
-                    if ((storage::last_tvl > 0) & (time_now < storage::end_time)) {
-                        storage::distributed_rewards += muldiv((time_now - storage::last_update_time) * storage::farming_speed, distributed_rewards_devider, (farming_speed_devider * storage::last_tvl));
-                    }
-                    storage::farming_speed = new_farming_speed;
-                    storage::start_time = time_now;
-                }
+                storage::farming_speed = new_farming_speed;
+                storage::start_time = time_now;
             }
             storage::end_time = new_end_time;
 
