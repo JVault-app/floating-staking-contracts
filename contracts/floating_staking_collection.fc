@@ -457,7 +457,6 @@ cell get_nft_content(int index, cell individual_content) method_id {
     
     return (begin_cell()
                 .store_uint(1, 8)  ;; offchain tag
-                .store_uint(0, 8)
                 .store_slice(common_content)
                 .store_builder(string)
             .end_cell());
