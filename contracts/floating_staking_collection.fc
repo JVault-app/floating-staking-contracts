@@ -178,10 +178,12 @@ global slice storage::creator_address;         ;; Creator address (MsgAddress)
             storage::rewards_balance += transferred_jettons - commission;
 
             if ((storage::farming_speed != 0)) {  ;; if pool is active -> change farming speed
-                ifnot (storage::end_time < time_now) {
+                if (time_now < storage::end_time) {
                     storage::rewards_balance -= muldiv((time_now - storage::start_time), storage::farming_speed, farming_speed_devider);
                 }
-
+                else {
+                    storage::rewards_balance = transferred_jettons - commission;
+                }
                 int new_farming_speed = (storage::last_tvl != 0) ? muldiv(storage::rewards_balance, farming_speed_devider, (new_end_time - time_now)) : 0;
 
                 if ((new_farming_speed < storage::farming_speed) & (time_now < storage::end_time) & (storage::last_tvl > 0)) {  ;; it is impossible to decrease farming speed if staking hasn't ended
